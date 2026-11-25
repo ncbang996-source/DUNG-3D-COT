@@ -107,3 +107,6 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   sau thanh cánh (32 đầu thanh được kéo dài; thanh ngang giờ tới cách lưng thanh cánh 55 mm).
 - Thanh giằng vách đặt TRÊN cánh nằm ngang của thanh ngang mặt cột (theo mặt cắt, bắt 1.16_40); bu lông kẹp
   thanh giằng + cánh ngang.
+- Mặt cắt vách: đường tâm thanh ngang mặt cột = đường đinh CÁNH NẰM NGANG (nơi bắt thanh giằng), nằm lệch vào trong
+  mặt cột một đoạn = độ sâu lưng thanh ngang - đường đinh (L60x5: 68 - 30 = 38 mm; L80x6: 68 - 40 = 28 mm).
+  Đã kiểm: mọi bu lông đầu thanh giằng vách nằm trên cánh ngang của thanh ngang.

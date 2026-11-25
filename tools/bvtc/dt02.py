@@ -511,6 +511,16 @@ def main(dxf, outdir):
         hy = [(m["c1"][1] + m["c2"][1]) / 2 for m in pm if m["ang"] < 2 or m["ang"] > 178]
         cxp, cyp = min(vx), min(hy)
         R.assign_labels(pm, pl_labs, None)
+        # Đường tâm thanh ngang mặt cột trên mặt cắt = đường đinh CÁNH NẰM NGANG của nó (nơi bắt thanh giằng),
+        # không phải mặt phẳng mặt cột. Lệch vào trong: hp = h + (độ sâu lưng thanh ngang - đường đinh).
+        fh2 = [m for m in keep if (m["ang"] % 180 < 3 or m["ang"] % 180 > 177) and abs(m["c1"][1] - ycut) < 12]
+        if fh2:
+            mh = min(fh2, key=lambda m: abs(m["c1"][1] - ycut))
+            dback = min(mh["delta"])
+            plan_off = dback - (mh["heel_to_center"] or sec(mh["section"])["b"] / 2)
+        else:
+            plan_off = 0.0
+        hp = h + plan_off
         # 1/4 vách đối xứng qua đường chéo góc: thanh chưa nhãn lấy nhãn thanh đối xứng (đổi x <-> y)
         mir = lambda p: (cxp + (p[1] - cyp), cyp + (p[0] - cxp))
         for m in pm:
@@ -529,8 +539,8 @@ def main(dxf, outdir):
             if m["width"] >= 120:
                 continue
             # mặt bằng: thanh vẽ toàn nét khuất là thanh nằm DƯỚI thanh khác, vẫn giữ
-            q1 = ((m["b1"][0] - cxp) * SC - h, (m["b1"][1] - cyp) * SC - h)     # mm, gốc = tâm cột, đầu thanh thật
-            q2 = ((m["b2"][0] - cxp) * SC - h, (m["b2"][1] - cyp) * SC - h)
+            q1 = ((m["b1"][0] - cxp) * SC - hp, (m["b1"][1] - cyp) * SC - hp)   # mm, gốc = tâm cột, đầu thanh thật
+            q2 = ((m["b2"][0] - cxp) * SC - hp, (m["b2"][1] - cyp) * SC - hp)
             ax_ = unit([q2[0] - q1[0], q2[1] - q1[1], 0])
             on_face = (abs(ax_[1]) > 0.999 and abs(q1[0] + h) < 120 and abs(q2[0] + h) < 120) or \
                       (abs(ax_[0]) > 0.999 and abs(q1[1] + h) < 120 and abs(q2[1] + h) < 120)
@@ -567,7 +577,7 @@ def main(dxf, outdir):
         # bu lông (khối 1/2/3) và bản mã (lớp Banma) vẽ trên mặt cắt: lấy trong 1/4 vách, trục đứng
         bx0, by0, bx1, by1 = box
         inbox = lambda p: bx0 <= p[0] <= bx1 and by0 <= p[1] <= by1
-        loc = lambda p: ((p[0] - cxp) * SC - h, (p[1] - cyp) * SC - h)
+        loc = lambda p: ((p[0] - cxp) * SC - hp, (p[1] - cyp) * SC - hp)
         pb, pp = 0, 0
         for e in msp.query("INSERT"):
             if e.dxf.name in ("1", "2", "3") and inbox(e.dxf.insert):
