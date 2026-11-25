@@ -14,6 +14,7 @@ import merge as MG  # noqa: E402
 import orientation as OR  # noqa: E402
 import parse_dxf as PD  # noqa: E402
 import parse_pdf as PP  # noqa: E402
+import plates as PL  # noqa: E402
 import section_library as SL  # noqa: E402
 
 
@@ -51,8 +52,11 @@ def main():
 
     OR.main(out, data / "orientation_override.csv")
     scene = json.loads((out / "scene.json").read_text())
+    prep = PL.apply(scene, lib)
+    (out / "plates_report.json").write_text(json.dumps(prep, indent=1, ensure_ascii=False))
+    PL.print_report(prep)
     scene["nodes"] = d["nodes"]
-    scene["report"] = {"total_mass_kg": rep["total_mass_kg"],
+    scene["report"] = {"total_mass_kg": rep["total_mass_kg"], "plates": prep,
                        "orientation": json.loads((out / "orientation_report.json").read_text())}
     (web / "scene.json").write_text(json.dumps(scene, ensure_ascii=False, separators=(",", ":")))
     print(f"Đã ghi {web / 'scene.json'}")

@@ -84,3 +84,56 @@ def test_rule_counts(data):
         rules[r["rule"]] = rules.get(r["rule"], 0) + 1
     assert rules["leg"] == 88
     assert sum(rules.values()) == 664
+
+
+def test_face_members_against_leg_flange(data):
+    """Thanh mặt cột ép sát cánh thanh cánh: trong = mặt trong (b/2 - t), ngoài = mặt ngoài (b/2)."""
+    model, lib, _ = data
+    OR.by_id = {m["id"]: m for m in model}
+    res, log = OR.solve(model, lib, check_clash=False)
+    body = OR.Body(model)
+    xs = log["x_members"]
+    assert len(xs["outside"]) == len(xs["inside"]) == 128
+    for m in model:
+        r = res[m["id"]]
+        if r["rule"] != "face":
+            continue
+        n = body.normal(r["face"], m["p1"][2], m["p2"][2])
+        bc, tc = OR.leg_section_at(model, lib, r["leg_ref_z"])
+        off = float(np.dot(r["offs"][r["variant"]], n))
+        if m["id"] in xs["outside"]:
+            assert r["variant"].startswith("out") and abs(off - bc / 2) < 1e-4
+        else:
+            assert r["variant"].startswith("in") and abs(off - (bc / 2 - tc)) < 1e-4
+
+
+def test_x_pair_gap_equals_leg_thickness(data):
+    """Tại nút giao chữ X: hai thanh (ngoài, trong) quay lưng vào nhau, hở đúng t thanh cánh."""
+    model, lib, _ = data
+    OR.by_id = {m["id"]: m for m in model}
+    res, log = OR.solve(model, lib, check_clash=False)
+    body = OR.Body(model)
+    out_ids, in_ids = set(log["x_members"]["outside"]), set(log["x_members"]["inside"])
+    leg_nodes = {tuple(p) for m in model if m["type"] in ("C", "CĐ") for p in (m["p1"], m["p2"])}
+    by_node = {}
+    for m in model:
+        if m["id"] in out_ids | in_ids:
+            for k in ("p1", "p2"):
+                by_node.setdefault(tuple(m[k]), []).append(m)
+    checked = 0
+    for nd, ms in by_node.items():
+        o = [m for m in ms if m["id"] in out_ids]
+        i = [m for m in ms if m["id"] in in_ids]
+        if nd not in leg_nodes and len(o) == 2 and len(i) == 2:
+            n = body.normal(res[o[0]["id"]]["face"], nd[2], nd[2] + 0.1)
+            assert len({res[m["id"]]["leg_ref_z"] for m in o + i}) == 1   # cả cụm X cùng chuẩn
+            _, tc = OR.leg_section_at(model, lib, nd[2])
+            gap = np.dot(res[o[0]["id"]]["offs"][res[o[0]["id"]]["variant"]], n) - \
+                np.dot(res[i[0]["id"]]["offs"][res[i[0]["id"]]["variant"]], n)
+            assert abs(gap - tc) < 1e-4
+            checked += 1
+    assert checked == 64
+
+
+def test_ceil5():
+    assert OR.ceil5(48) == 50 and OR.ceil5(72) == 75 and OR.ceil5(60) == 60

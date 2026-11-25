@@ -44,12 +44,18 @@ Thư viện three.js 0.160.0 đã nằm sẵn trong `web/vendor/`, chạy đư�
 - Đường tim DXF = đường đinh, ở giữa bề rộng cánh (b/2), trên mặt lưng cánh liên kết.
   Thanh cánh C, CĐ: giao hai đường đinh, tức điểm (b/2, b/2) tính từ góc lưng.
 - Thanh cánh C, CĐ: lưng quay ra ngoài góc thân, hai cánh nằm trên hai mặt kề nhau.
-- Thanh trên mặt ngoài thân: cánh liên kết nằm trong mặt cột, cánh còn lại hướng vào trong.
-- Thanh vách ngang và xà: cánh liên kết nằm ngang, cánh còn lại chĩa xuống. Riêng thanh đứng
-  của xà: cánh liên kết nằm trong mặt đứng song song trục X, cánh còn lại chĩa về trục giữa xà.
-- Bị cấn thép (ngoài vùng nút, bán kính max(b) + 3 cm) thì lần lượt thử: đổi phía góc lưng,
-  lật ra ngoài (lên). Chọn theo NHÓM để giữ đối xứng. Kết quả: `out/orientation_report.json`.
-- Ghi đè: `data/orientation_override.csv` gồm hai cột `id,variant`, với variant ∈ `in+ in- out+ out-`.
-  App có nút tải file này sau khi sửa hướng trên giao diện.
-- Bu lông: ưu tiên số lượng ít nhất trong ba cột M16/M20/M24.
+- Thanh trên mặt cột: lưng ép sát cánh thanh cánh.
+  - Cặp chữ X: nhìn từ ngoài vào, thanh đi lên về bên phải nằm NGOÀI (áp mặt ngoài cánh thanh
+    cánh), thanh kia nằm TRONG (áp mặt trong). Hai thanh hở nhau bằng chiều dày cánh thanh cánh.
+    Cả cụm X lấy tiết diện thanh cánh tại cao độ nút giao.
+  - Mọi thanh khác trên mặt cột nằm TRONG. Không tự lật; chỉ tự đổi phía góc lưng nếu bị cấn.
+- Thanh vách ngang và xà: cánh liên kết nằm ngang, cánh còn lại chĩa xuống; riêng XAD chĩa LÊN.
+  Thanh đứng của xà: cánh liên kết nằm trong mặt đứng song song trục X, chĩa về trục giữa xà.
+- Vẫn cấn: dời điểm bắt dọc thanh bị cấn 3d (làm tròn LÊN 5 mm); chỉ giữ nếu gỡ được cấn.
+- Bu lông: ít con nhất trong M16/M20/M24, bằng nhau lấy đường kính nhỏ hơn. Một hàng trên đường
+  đinh, cách đầu thanh 1,5d, khoảng cách 3d (không vẽ bu lông mối nối thanh cánh).
+- Bản mã (`src/plates.py`): ở nút có thanh (không tính thanh cánh) hơn 2 bu lông. Dày = thanh nối
+  mỏng nhất làm tròn lên 6/8/10/12/14/16 mm. Hình = bao lồi bu lông + 1,5d. Trên thanh cánh: bản mã
+  áp cánh thanh cánh, đầu thanh nối đẩy ra bằng chiều dày bản mã. Nút giao chữ X: một bản đệm lấp
+  khe hở (dày = chiều dày cánh thanh cánh).
 - Hai đầu thanh cắt vuông, chưa xử lý giao cắt tại nút, chưa có bản mã.

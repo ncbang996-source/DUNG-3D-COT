@@ -61,10 +61,12 @@ const dark = matchMedia('(prefers-color-scheme: dark)').matches;
 scene.background = new THREE.Color(dark ? 0x101317 : 0xeef1f5);
 
 const steelGroup = new THREE.Group();
+const plateGroup = new THREE.Group();
+const boltGroup = new THREE.Group();
 const axisGroup = new THREE.Group();
 const nodeLabelGroup = new THREE.Group();
 const memLabelGroup = new THREE.Group();
-scene.add(steelGroup, axisGroup, nodeLabelGroup, memLabelGroup);
+scene.add(steelGroup, plateGroup, boltGroup, axisGroup, nodeLabelGroup, memLabelGroup);
 axisGroup.visible = false;
 
 function resize() {
@@ -92,7 +94,10 @@ function buildGeometry(m) {
   const prof = s.profile;                           // mm, heel at origin
   const [g1, g2] = m.g;                              // mm
   const [e1, e2] = frameOf(m, m.variant).map((a) => new THREE.Vector3(...a));
-  const p1 = new THREE.Vector3(...m.p1), p2 = new THREE.Vector3(...m.p2);
+  // đầu thanh vẽ: điểm DXF (hoặc điểm bắt đã dời) + dịch ép sát cánh thanh cánh + đẩy ra khỏi bản mã
+  const off = new THREE.Vector3(...((m.offs && m.offs[m.variant]) || [0, 0, 0]));
+  const p1 = new THREE.Vector3(...(m.p1d || m.p1)).add(off).add(new THREE.Vector3(...(m.poff1 || [0, 0, 0])));
+  const p2 = new THREE.Vector3(...(m.p2d || m.p2)).add(off).add(new THREE.Vector3(...(m.poff2 || [0, 0, 0])));
   const ring = (p) => prof.map(([a, b]) => p.clone()
     .addScaledVector(e1, (a - g1) / 1000).addScaledVector(e2, (b - g2) / 1000));
   const r0 = ring(p1), r1 = ring(p2);
@@ -165,6 +170,45 @@ function rebuildMember(m) {
   requestRender();
 }
 
+// ---------------------------------------------------------------- bản mã, bu lông
+const plateMat = new THREE.MeshStandardMaterial({ color: 0x2f9e8f, metalness: 0.3, roughness: 0.55, side: THREE.DoubleSide });
+const boltMat = new THREE.MeshStandardMaterial({ color: 0xd4a017, metalness: 0.6, roughness: 0.35 });
+function buildPlates() {
+  for (const [k, pl] of (DATA.plates || []).entries()) {
+    const o = new THREE.Vector3(...pl.origin), a1 = new THREE.Vector3(...pl.a1), a2 = new THREE.Vector3(...pl.a2);
+    const td = new THREE.Vector3(...pl.thick_dir).multiplyScalar(pl.t_mm / 1000);
+    const P = pl.poly.map(([x, y]) => o.clone().addScaledVector(a1, x).addScaledVector(a2, y));
+    const Q = P.map((p) => p.clone().add(td));
+    const pos = [];
+    const push = (...vs) => vs.forEach((v) => pos.push(v.x, v.y, v.z));
+    const n = P.length;
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; push(P[i], P[j], Q[j], P[i], Q[j], Q[i]); }
+    for (let i = 1; i < n - 1; i++) { push(P[0], P[i], P[i + 1]); push(Q[0], Q[i + 1], Q[i]); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, plateMat);
+    mesh.userData = { plate: k, pickable: true };
+    plateGroup.add(mesh);
+  }
+}
+function buildBolts() {
+  const bolts = DATA.bolts || [];
+  if (!bolts.length) return;
+  const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);   // trục Y, sẽ co giãn
+  const inst = new THREE.InstancedMesh(geo, boltMat, bolts.length);
+  const Y = new THREE.Vector3(0, 1, 0), M = new THREE.Matrix4(), q = new THREE.Quaternion();
+  bolts.forEach((b, i) => {
+    const d = b.d_mm / 1000, ax = new THREE.Vector3(...b.axis);
+    const len = (b.t_mm * 2) / 1000 + 1.4 * d;                // thanh + phần liên kết + đầu, đai ốc
+    const c = new THREE.Vector3(...b.p).addScaledVector(ax, b.t_mm / 2000);
+    q.setFromUnitVectors(Y, ax);
+    M.compose(c, q, new THREE.Vector3(d, len, d));
+    inst.setMatrixAt(i, M);
+  });
+  boltGroup.add(inst);
+}
+
 // ---------------------------------------------------------------- labels
 function makeLabel(text, cls, pos, id) {
   const el = document.createElement('div');
@@ -208,13 +252,17 @@ function showInfo(m) {
   $('info').hidden = !m;
   if (!m) return;
   const s = sections[m.section];
+  $('info').querySelector('h2').firstChild.textContent = 'Thanh ';
   $('iId').textContent = m.id;
   const rows = [
     ['Nhóm', m.group], ['Tiết diện', `${m.section} (JIS G3192 ${s.b}×${s.b}×${s.t})`], ['Type', m.type],
     ['Chiều dài', fmt(m.length, 3) + ' m'], ['A', fmt(m.A_cm2) + ' cm²'], ['Khối lượng', fmt(massOf(m), 1) + ' kg'],
     ['Bu lông', boltText(m)], ['Nút', `${m.node1 ?? '?'} → ${m.node2 ?? '?'}`],
     ['Quy tắc', m.rule === 'leg' ? 'Thanh cánh (lưng ra ngoài góc)' :
-      m.rule === 'face' ? `Trên mặt cột ${m.face}` : 'Vách ngang / xà'],
+      m.rule === 'face' ? `Trên mặt cột ${m.face}` + (m.x_pair ? ' · cặp chữ X' : '') +
+        (m.variant.startsWith('out') ? ' · lưng áp mặt NGOÀI cánh thanh cánh' : ' · lưng áp mặt TRONG cánh thanh cánh') :
+      'Vách ngang / xà'],
+    ...(m.p1d ? [['Điểm bắt đã dời', `${m.p1d.join(', ')} → ${m.p2d.join(', ')}`]] : []),
     ['Hướng cánh', m.rule === 'leg' ? '—' : `${m.variant} · ${varText(m, m.variant)}` +
       (m.default_up ? ' (XAD: mặc định hướng lên)' : '') + (m.variant !== m.auto_variant ? ' <b>(đã sửa)</b>' : '')],
   ];
@@ -225,6 +273,23 @@ function showInfo(m) {
   sel.innerHTML = m.rule === 'leg' ? '<option>—</option>' :
     VARIANTS.map((v) => `<option value="${v}" ${v === m.variant ? 'selected' : ''}>${v} · ${varText(m, v)}</option>`).join('');
   drawSection(m);
+}
+
+function showPlate(k) {
+  const pl = DATA.plates[k];
+  $('info').hidden = false;
+  $('iId').textContent = '';
+  $('info').querySelector('h2').firstChild.textContent = 'Bản mã ';
+  const rows = [
+    ['Loại', pl.filler_x ? 'Bản đệm nút giao chữ X' : pl.on_leg ? 'Bản mã áp cánh thanh cánh' : 'Bản mã'],
+    ['Chiều dày', pl.t_mm + ' mm'], ['Diện tích', fmt(pl.area_m2 * 1e4, 0) + ' cm²'],
+    ['Khối lượng', fmt(pl.mass_kg, 2) + ' kg'], ['Thanh nối', pl.members.join(', ')],
+    ['Bu lông lớn nhất', `${pl.bolt_max} con / đầu thanh, d = ${pl.d_max_mm} mm`],
+  ];
+  $('iTable').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  $('secSvg').innerHTML = '';
+  $('iVariant').innerHTML = '<option>—</option>';
+  $('iVariant').disabled = $('applyGroup').disabled = $('resetVar').disabled = true;
 }
 
 function drawSection(m) {
@@ -254,7 +319,10 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const r = renderer.domElement.getBoundingClientRect();
   ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(ptr, camera);
-  const hit = ray.intersectObjects([...meshes.values()].filter((x) => x.visible && x.userData.pickable))[0];
+  const objs = [...meshes.values()].filter((x) => x.visible && x.userData.pickable);
+  if (plateGroup.visible) objs.push(...plateGroup.children);
+  const hit = ray.intersectObjects(objs)[0];
+  if (hit && hit.object.userData.plate !== undefined) { select(null); showPlate(hit.object.userData.plate); return; }
   select(hit ? hit.object.userData.id : null);
 });
 
@@ -310,13 +378,26 @@ function stats() {
   }
   return Object.entries(by).sort((a, b) => a[1].b - b[1].b || a[0].localeCompare(b[0]));
 }
+function platesStats() {
+  const P = DATA.plates || [], B = DATA.bolts || [];
+  const byT = {};
+  for (const p of P) { const s = (byT[p.t_mm] ??= { n: 0, a: 0, m: 0 }); s.n++; s.a += p.area_m2; s.m += p.mass_kg; }
+  const byD = {};
+  for (const b of B) byD['M' + b.d_mm] = (byD['M' + b.d_mm] || 0) + 1;
+  const pm = P.reduce((a, p) => a + p.mass_kg, 0);
+  return `<h3>Bản mã (A × t × 7850)</h3><table><tr><th>Chiều dày (mm)</th><th>Số bản</th><th>Diện tích (m²)</th><th>Khối lượng (kg)</th></tr>` +
+    Object.entries(byT).sort((a, b) => a[0] - b[0]).map(([t, s]) => `<tr><td>${t}</td><td>${s.n}</td><td>${fmt(s.a, 3)}</td><td>${fmt(s.m, 1)}</td></tr>`).join('') +
+    `<tr><th>Tổng</th><th>${P.length}</th><th></th><th>${fmt(pm, 1)}</th></tr></table>` +
+    `<h3>Bu lông (không tính mối nối thanh cánh)</h3><p>${Object.entries(byD).map(([k, n]) => `${k}: ${n} con`).join(' · ')}</p>` +
+    `<p class="muted">Bản mã chỉ đặt ở nút có thanh (không tính thanh cánh) hơn 2 bu lông. Bản mã tính theo hướng cánh tự động; đổi hướng trong app không tính lại bản mã.</p>`;
+}
 $('btnStats').addEventListener('click', () => {
   const rows = stats();
   const tot = rows.reduce((a, [, s]) => ({ c: a.c + s.count, l: a.l + s.len, m: a.m + s.mass }), { c: 0, l: 0, m: 0 });
-  $('statsBody').innerHTML = `<table><tr><th>Tiết diện</th><th>A (cm²)</th><th>Số thanh</th><th>Tổng dài (m)</th><th>Khối lượng (kg)</th></tr>` +
+  $('statsBody').innerHTML = `<h3>Thanh thép góc</h3><table><tr><th>Tiết diện</th><th>A (cm²)</th><th>Số thanh</th><th>Tổng dài (m)</th><th>Khối lượng (kg)</th></tr>` +
     rows.map(([k, s]) => `<tr><td>${k}</td><td>${fmt(s.A)}</td><td>${s.count}</td><td>${fmt(s.len)}</td><td>${fmt(s.mass, 1)}</td></tr>`).join('') +
     `<tr><th>Tổng</th><th></th><th>${tot.c}</th><th>${fmt(tot.l)}</th><th>${fmt(tot.m, 1)}</th></tr></table>
-    <p class="muted">Chỉ tính thanh thép góc, chưa có bản mã và bu lông.</p>`;
+    ${platesStats()}`;
   $('statsDlg').showModal();
 });
 $('btnStatsCsv').addEventListener('click', () => {
@@ -327,6 +408,8 @@ $('btnStatsCsv').addEventListener('click', () => {
 // ---------------------------------------------------------------- controls
 $('colorBy').addEventListener('change', (e) => { state.colorBy = e.target.value; refreshMaterials(); if (state.selected) drawSection(byId.get(state.selected)); });
 $('showSteel').addEventListener('change', (e) => { steelGroup.visible = e.target.checked; requestRender(); });
+$('showPlates').addEventListener('change', (e) => { plateGroup.visible = e.target.checked; requestRender(); });
+$('showBolts').addEventListener('change', (e) => { boltGroup.visible = e.target.checked; requestRender(); });
 $('showAxis').addEventListener('change', (e) => { axisGroup.visible = e.target.checked; requestRender(); });
 $('showNodes').addEventListener('change', (e) => { ensureLabels(); nodeLabelGroup.visible = e.target.checked; requestRender(); });
 $('showMemNo').addEventListener('change', (e) => { ensureLabels(); memLabelGroup.visible = e.target.checked; refreshMaterials(); });
@@ -351,6 +434,8 @@ async function load() {
     meshes.set(m.id, mesh);
     steelGroup.add(mesh);
   }
+  buildPlates();
+  buildBolts();
   const lp = [];
   for (const m of members) lp.push(...m.p1, ...m.p2);
   const lg = new THREE.BufferGeometry();
@@ -373,9 +458,10 @@ async function load() {
   const tot = members.reduce((a, m) => a + massOf(m), 0);
   const ori = DATA.report.orientation;
   $('summary').innerHTML = `${members.length} thanh · ${DATA.nodes.length} nút · ${secNames.length} tiết diện<br>` +
-    `Khối lượng thanh: <b>${fmt(tot, 0)} kg</b><br>` +
-    `<span class="muted">Hướng tự động: ${ori.flipped_out.reduce((a, g) => a + g.members.length, 0)} thanh lật ra ngoài, ` +
-    `${ori.unresolved.reduce((a, g) => a + g.members.length, 0)} thanh vẫn cấn.</span>`;
+    `Khối lượng thanh: <b>${fmt(tot, 0)} kg</b> · bản mã ${(DATA.plates || []).length} bản, ` +
+    `${fmt((DATA.plates || []).reduce((a, p) => a + p.mass_kg, 0), 0)} kg<br>` +
+    `<span class="muted">Cặp chữ X: ${ori.x_members.outside.length} thanh ngoài, ${ori.x_members.inside.length} thanh trong · ` +
+    `cấn: ${(ori.clash_other || []).length} cặp, chồng mép cùng mặt phẳng: ${(ori.clash_coplanar_overlap || []).length} cặp.</span>`;
   refreshMaterials();
   updateOvCount();
   window.__ready = true;
