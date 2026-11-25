@@ -20,9 +20,26 @@ const $ = (id) => document.getElementById(id);
 const view = $('view');
 
 // ---------------------------------------------------------------- scene
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(window.devicePixelRatio);
+function fatal(msg) {
+  view.innerHTML = `<div class="fatal">${msg}</div>`;
+  const s = document.getElementById('summary'); if (s) s.textContent = 'Không hiển thị được mô hình 3D.';
+}
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+} catch (e) {
+  fatal('Trình duyệt không khởi tạo được WebGL (đồ họa 3D).<br>Hãy mở bằng Chrome, Edge hoặc Firefox bản mới, ' +
+        'và bật "Tăng tốc phần cứng" (Hardware acceleration) trong cài đặt trình duyệt.<br><small>' + e.message + '</small>');
+  throw e;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.domElement.style.display = 'block';
 view.appendChild(renderer.domElement);
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  fatal('Mất kết nối đồ họa (WebGL context lost). Card đồ họa hoặc trình duyệt đã ngắt.<br>' +
+        'Hãy tải lại trang; nếu lặp lại, bật "Tăng tốc phần cứng" hoặc thử trình duyệt khác.');
+});
 const labelRenderer = new CSS2DRenderer();
 labelRenderer.domElement.style.position = 'absolute';
 labelRenderer.domElement.style.top = '0';
@@ -33,7 +50,8 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 2000);
 camera.up.set(0, 0, 1);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
+controls.enableDamping = false;
+controls.addEventListener('change', () => requestRender());
 scene.add(new THREE.HemisphereLight(0xffffff, 0x667080, 1.4));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(30, -40, 80);
@@ -55,6 +73,7 @@ function resize() {
   labelRenderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  requestRender();
 }
 new ResizeObserver(resize).observe(view);
 
@@ -128,6 +147,7 @@ function refreshMaterials() {
   }
   for (const o of memLabelGroup.children) o.visible = passes(byId.get(o.userData.id));
   renderLegend();
+  requestRender();
 }
 
 function renderLegend() {
@@ -142,6 +162,7 @@ function rebuildMember(m) {
   const mesh = meshes.get(m.id);
   mesh.geometry.dispose();
   mesh.geometry = buildGeometry(m);
+  requestRender();
 }
 
 // ---------------------------------------------------------------- labels
@@ -300,9 +321,9 @@ $('btnStatsCsv').addEventListener('click', () => {
 
 // ---------------------------------------------------------------- controls
 $('colorBy').addEventListener('change', (e) => { state.colorBy = e.target.value; refreshMaterials(); if (state.selected) drawSection(byId.get(state.selected)); });
-$('showSteel').addEventListener('change', (e) => { steelGroup.visible = e.target.checked; });
-$('showAxis').addEventListener('change', (e) => { axisGroup.visible = e.target.checked; });
-$('showNodes').addEventListener('change', (e) => { ensureLabels(); nodeLabelGroup.visible = e.target.checked; });
+$('showSteel').addEventListener('change', (e) => { steelGroup.visible = e.target.checked; requestRender(); });
+$('showAxis').addEventListener('change', (e) => { axisGroup.visible = e.target.checked; requestRender(); });
+$('showNodes').addEventListener('change', (e) => { ensureLabels(); nodeLabelGroup.visible = e.target.checked; requestRender(); });
 $('showMemNo').addEventListener('change', (e) => { ensureLabels(); memLabelGroup.visible = e.target.checked; refreshMaterials(); });
 for (const [id, key] of [['fSection', 'fSection'], ['fType', 'fType'], ['fGroup', 'fGroup']]) {
   $(id).addEventListener('change', (e) => { state[key] = e.target.value; refreshMaterials(); });
@@ -341,6 +362,7 @@ async function load() {
   const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
   controls.target.copy(c);
   camera.position.set(c.x + sz.z * 0.9, c.y - sz.z * 1.3, c.z + sz.z * 0.15);
+  controls.update();
   resize();
 
   const tot = members.reduce((a, m) => a + massOf(m), 0);
@@ -356,11 +378,17 @@ async function load() {
 
 load().catch((e) => { $('summary').textContent = 'Lỗi tải dữ liệu: ' + e.message; console.error(e); });
 
-renderer.setAnimationLoop(() => {
-  controls.update();
-  renderer.render(scene, camera);
-  labelRenderer.render(scene, camera);
-});
+// Chỉ vẽ lại khi có thay đổi (không vẽ liên tục) để nhẹ máy và tránh chớp màn hình.
+let pending = false;
+function requestRender() {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => {
+    pending = false;
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+  });
+}
 
 // cho kiểm thử tự động
-window.__app = { select, state, meshes, byId: () => byId, camera, controls };
+window.__app = { select, state, meshes, byId: () => byId, camera, controls, requestRender };

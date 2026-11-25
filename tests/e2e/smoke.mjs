@@ -28,7 +28,7 @@ await page.screenshot({ path: join(OUT, 'app_overview.png') });
 // Chọn thanh 569 (CĐ) và xem thông tin, phóng gần chân cột
 await page.evaluate(() => {
   const a = window.__app; a.select(569);
-  a.controls.target.set(-2.3, -2.3, 21); a.camera.position.set(-0.2, -5.5, 22.2);
+  a.controls.target.set(-2.3, -2.3, 21); a.camera.position.set(-0.2, -5.5, 22.2); a.controls.update(); a.requestRender();
 });
 await page.waitForTimeout(500);
 await page.screenshot({ path: join(OUT, 'app_base_detail.png') });
@@ -39,7 +39,7 @@ await page.selectOption('#colorBy', 'variant');
 await page.evaluate(() => {
   const a = window.__app; a.select(833);
   const m = a.byId().get(833); const c = m.p1.map((v, i) => (v + m.p2[i]) / 2);
-  a.controls.target.set(...c); a.camera.position.set(c[0] + 2.5, c[1] - 6, c[2] + 1.5);
+  a.controls.target.set(...c); a.camera.position.set(c[0] + 2.5, c[1] - 6, c[2] + 1.5); a.controls.update(); a.requestRender();
 });
 await page.waitForTimeout(500);
 await page.screenshot({ path: join(OUT, 'app_variant.png') });

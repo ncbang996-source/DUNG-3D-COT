@@ -14,6 +14,16 @@ page.on('request', (r) => { if (!r.url().startsWith('file:') && !r.url().startsW
 await page.goto('file://' + f);
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
 console.log(await page.evaluate(() => window.__app.meshes.size + ' thanh | ' + document.getElementById('summary').innerText.replace(/\n/g, ' | ')));
+const inView = await page.evaluate(() => {
+  const a = window.__app; let n = 0;
+  for (const m of a.byId().values()) {
+    const v = a.camera.position.clone().set(...m.p1).project(a.camera);
+    if (Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1 && v.z < 1) n++;
+  }
+  return n;
+});
+console.log('Đầu thanh nằm trong khung nhìn:', inView, '/ 664');
+if (inView < 600) { console.error('LỖI: mô hình không nằm trong khung nhìn'); process.exitCode = 1; }
 await page.evaluate(() => window.__app.select(569));
 await page.waitForTimeout(400);
 console.log(await page.evaluate(() => document.getElementById('iTable').innerText.split('\n').slice(0, 3).join(' | ')));
