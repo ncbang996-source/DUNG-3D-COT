@@ -80,5 +80,10 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
 - Độ sâu mỗi đầu thanh theo thanh chủ: TRONG áp mặt trong, NGOÀI áp mặt ngoài; ở nút có bản mã thì áp bản mã.
 - Vách ngang 1-1, 3-3, 4-4: tam giác giằng góc; 2-2: 1/4 vách (chéo góc, hình thoi nối trung điểm mặt,
   vòng vuông L70x6) — cắt theo 1/4 rồi xoay 4 góc.
-- Còn thiếu: bản mã/bu lông của vách ngang (mặt cắt chưa đọc phần này); 2 thanh L60x5 gần chân không tìm
-  được thanh chủ (độ sâu tạm); 33 bu lông vẽ không nằm trên thanh/bản mã nào bị bỏ.
+- Vách ngang: bu lông đọc từ mặt cắt (19 con / 1/4, xoay 4 góc); mặt cắt không vẽ bản mã (thanh vách bắt trực tiếp).
+- Bản mã mối nối đỉnh đoạn (2 bên, trên thanh cánh) giữ lại; 29 bu lông bỏ là của hình chi tiết bản mã (12) và
+  hình khai triển thanh cánh (17) - xem `docs/DT-02_chu_thich.png`.
+- Thanh L60x5 dựng đứng trong khoang K trên (từ thanh ngang L80x6 z=5,8 m lên thanh xiên L90x7 z=7,6 m):
+  đầu thanh cách đường tim thanh chủ 35-50 mm (bản vẽ ghi) -> dung sai tìm thanh chủ 62 mm.
+- Chân cột (chi tiết DT-02): bản đế 450x450x40, 4 bu lông neo Ø56 (lỗ Ø64) cách mép 100, 2 sườn d12 áp lưng 2 cánh
+  thanh cánh, nghiêng theo thanh cánh (hình sườn lấy gần đúng 515 x 420, vát về 100 hai đầu).

@@ -212,8 +212,12 @@ def main(dxf, outdir):
         if not pts or not all(inb(q) for q in pts):
             continue
         inside_nodes = [n for n in nodes if point_in_poly(n, pts)]
+        on_leg_plate = any(dist_line(q, L_["w1"], L_["w2"]) < 3.0 for q in pts for L_ in legs) and \
+            any(min(L_["a"][1], L_["b"][1]) <= q[1] <= max(L_["a"][1], L_["b"][1]) for q in pts for L_ in legs)
+        if not inside_nodes and not on_leg_plate:
+            continue                       # hình chi tiết vẽ riêng trong khung
         if not inside_nodes:
-            continue
+            inside_nodes = [(sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts))]
         c = (sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts))
         near = sorted(thk, key=lambda t: math.dist(t[1], c))
         t_mm = near[0][0] if near and math.dist(near[0][1], c) < 45 else 8
@@ -230,7 +234,7 @@ def main(dxf, outdir):
             if o is m:
                 continue
             d_, t = dist_seg(p, o["c1"], o["c2"])
-            if d_ < TOL and 0.02 < t < 0.98 and (best is None or d_ < best[0]):
+            if d_ < 2.5 and 0.02 < t < 0.98 and (best is None or d_ < best[0]):   # <= 62 mm
                 best = (d_, o)
         return ("brace", best[1]) if best else (None, None)
 
@@ -250,7 +254,7 @@ def main(dxf, outdir):
     tl = sec(Lg["section"])["t"]
     gl = Lg["g"]
     for pl in plates2d:                       # bản mã áp mặt ngoài cánh thanh cánh (A-A) nếu nằm trên thanh cánh
-        on_leg_ = any(dist_line(n, L_["w1"], L_["w2"]) < TOL for n in pl["nodes"] for L_ in legs)
+        on_leg_ = any(dist_line(n, L_["w1"], L_["w2"]) < 3.0 for n in pl["nodes"] for L_ in legs)
         pl["delta0"] = gl if on_leg_ else None
     # lan truyền độ sâu
     for _ in range(20):
@@ -291,6 +295,7 @@ def main(dxf, outdir):
         if m["delta"][0] is None:
             m["delta"] = [gl if m["out"] else gl - tl] * 2
             rep["warnings"].append(f"thanh {m['section']} góc {m['ang']:.1f}: không tìm được thanh chủ")
+            rep.setdefault("no_host", []).append(m)
     for pl in plates2d:
         if pl["delta0"] is None:
             pl["delta0"] = gl
@@ -319,6 +324,7 @@ def main(dxf, outdir):
         else:
             rep.setdefault("bolts_dropped", 0)
             rep["bolts_dropped"] += 1
+            rep.setdefault("bolts_dropped_pts", []).append(q)
             continue
         bolts2d.append({"p": q, "delta": dl, "d": {"1": 16, "2": 20, "3": 24}[e.dxf.name]})
 
@@ -400,6 +406,7 @@ def main(dxf, outdir):
     # --- mặt cắt vách ngang
     plan_rep = {}
     plan_chk = {}
+    plan_bolts, plan_plates = [], []
     plan_members = []
     for pname, (ymark, box) in PLANS.items():
         hor = [m for m in ms if (m["ang"] % 180 < 1 or m["ang"] % 180 > 179)]
@@ -468,7 +475,27 @@ def main(dxf, outdir):
                 m["section"], m["section_from"] = best, "đoán theo bề rộng"
                 rep["warnings"].append(f"mặt cắt {pname}: thanh rộng {m['width']} không có nhãn, đoán {best}")
             kept.append((m, q1, q2))
-        plan_rep[pname] = {"z_mm": round(z), "h_mm": round(h), "n_read": len(pm), "n_kept": len(kept),
+        # bu lông (khối 1/2/3) và bản mã (lớp Banma) vẽ trên mặt cắt: lấy trong 1/4 vách, trục đứng
+        bx0, by0, bx1, by1 = box
+        inbox = lambda p: bx0 <= p[0] <= bx1 and by0 <= p[1] <= by1
+        loc = lambda p: ((p[0] - cxp) * SC - h, (p[1] - cyp) * SC - h)
+        pb, pp = 0, 0
+        for e in msp.query("INSERT"):
+            if e.dxf.name in ("1", "2", "3") and inbox(e.dxf.insert):
+                q = loc(e.dxf.insert)
+                if q[0] <= 5 and q[1] <= 5:
+                    plan_bolts.append((q, z, {"1": 16, "2": 20, "3": 24}[e.dxf.name]))
+                    pb += 1
+        for e in msp.query('LWPOLYLINE[layer=="Banma"]'):
+            pts = [(q_[0], q_[1]) for q_ in e.get_points()]
+            if pts and all(inbox(q_) for q_ in pts):
+                Q = [loc(q_) for q_ in pts]
+                cxq, cyq = sum(q_[0] for q_ in Q) / len(Q), sum(q_[1] for q_ in Q) / len(Q)
+                if cxq <= 5 and cyq <= 5:
+                    plan_plates.append((Q, z))
+                    pp += 1
+        plan_rep_extra = {"bolts": pb, "plates": pp}
+        plan_rep[pname] = {**plan_rep_extra, "z_mm": round(z), "h_mm": round(h), "n_read": len(pm), "n_kept": len(kept),
                            "span_mm": [round(span[0]), round(span[1])]}
         plan_chk[pname] = {"cad": [[[(sg["a"][0] - cxp) * SC - h, (sg["a"][1] - cyp) * SC - h],
                                     [(sg["b"][0] - cxp) * SC - h, (sg["b"][1] - cyp) * SC - h], sg["k"]]
@@ -506,6 +533,67 @@ def main(dxf, outdir):
         m["id"] = mid
         members.append(m)
     rep["plans"] = plan_rep
+    seenb = set()
+    for (q, z, dmm) in plan_bolts:
+        for k in range(4):
+            p = rot(k) @ np.array([q[0], q[1], z]) / 1000
+            key = tuple(np.round(p, 3))
+            if key in seenb:
+                continue
+            seenb.add(key)
+            bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": [0, 0, 1.0], "nut": [0, 0, -1.0],
+                          "d_mm": dmm, "t_mm": 8, "kind": "plan"})
+    for (Q, z) in plan_plates:
+        for k in range(4):
+            P = [rot(k) @ np.array([q[0], q[1], z]) / 1000 for q in Q]
+            o, a1, a2 = P[0], rot(k) @ np.array([1.0, 0, 0]), rot(k) @ np.array([0, 1.0, 0])
+            poly = [[round(float(np.dot(q - o, a1)), 5), round(float(np.dot(q - o, a2)), 5)] for q in P]
+            area = abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                           for i in range(len(poly)))) / 2
+            plates.append({"kind": "gusset", "node": o.round(4).tolist(), "members": [], "t_mm": 8,
+                           "on_leg": False, "origin": o.round(5).tolist(), "a1": a1.round(6).tolist(),
+                           "a2": a2.round(6).tolist(), "thick_dir": [0, 0, -1.0], "poly": poly,
+                           "area_m2": round(area, 5), "mass_kg": round(area * 8 / 1000 * 7850, 2),
+                           "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0, "reason": "bản vẽ DT-02 (mặt cắt)"})
+
+    # --- chân cột (chi tiết bản đế, tờ DT-02): bản đế 450x450 dày 40, 4 bu lông neo Ø56 cách mép 100,
+    #     2 sườn dày 12 hàn sát lưng 2 cánh thanh cánh, dài 515, cao 420 (vát về 100 ở hai đầu)
+    h0 = halfw(y0) / 1000
+    g = Lg["g"] / 1000
+    for k in range(4):
+        Rk = rot(k)
+        heel = np.array([-h0 - g, -h0 - g, 0.0])
+        ex_, ey_, ez_ = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
+        corner = heel - 0.225 * ex_ - 0.225 * ey_
+        P0 = Rk @ corner
+        plates.append({"kind": "gusset", "node": (Rk @ heel).round(4).tolist(), "members": [], "t_mm": 40,
+                       "on_leg": False, "origin": P0.round(5).tolist(), "a1": (Rk @ ex_).round(6).tolist(),
+                       "a2": (Rk @ ey_).round(6).tolist(), "thick_dir": [0, 0, -1.0],
+                       "poly": [[0, 0], [0.45, 0], [0.45, 0.45], [0, 0.45]], "area_m2": 0.2025,
+                       "mass_kg": round(0.2025 * 0.04 * 7850, 2), "bolt_max": 4, "d_max_mm": 56, "leg_bolts": 0,
+                       "reason": "bản đế chân cột (chi tiết DT-02): 450x450x40"})
+        rib = [[0, 0], [0.515, 0], [0.515, 0.10], [0.29, 0.42], [0.225, 0.42], [0, 0.10]]
+        # sườn bắt bu lông vào cánh thanh cánh (7x40) -> nằm trong mặt phẳng lưng cánh, nghiêng theo thanh cánh
+        ul = unit(np.array([to3(Lg["b"])[0][0] - to3(Lg["a"])[0][0], to3(Lg["b"])[0][1] - to3(Lg["a"])[0][1],
+                            to3(Lg["b"])[0][2] - to3(Lg["a"])[0][2]]))
+        for along, normal in ((ex_, -ey_), (ey_, -ex_)):
+            o = heel - 0.225 * along
+            up_ = unit(ul - np.dot(ul, along) * along)              # hướng lên trong mặt phẳng cánh
+            up_ = up_ / up_[2]                                       # giữ cao độ thật (0,42 m theo phương đứng)
+            nrm = unit(np.cross(along, up_))
+            if np.dot(nrm, normal) < 0:
+                nrm = -nrm
+            plates.append({"kind": "gusset", "node": (Rk @ heel).round(4).tolist(), "members": [], "t_mm": 12,
+                           "on_leg": False, "origin": (Rk @ o).round(5).tolist(), "a1": (Rk @ along).round(6).tolist(),
+                           "a2": (Rk @ up_).round(6).tolist(), "thick_dir": (Rk @ nrm).round(6).tolist(), "poly": rib,
+                           "area_m2": 0.155, "mass_kg": round(0.155 * 0.012 * 7850, 2), "bolt_max": 0,
+                           "d_max_mm": 0, "leg_bolts": 0, "reason": "sườn chân cột d12 (chi tiết DT-02, kích thước gần đúng)"})
+        for dx in (-0.125, 0.125):
+            for dy in (-0.125, 0.125):
+                p = Rk @ (heel + dx * ex_ + dy * ey_ + np.array([0, 0, 0.0]))
+                bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": [0, 0, 1.0], "nut": [0, 0, 1.0],
+                              "d_mm": 56, "t_mm": 40, "kind": "neo"})
+    rep["base"] = "4 bản đế 450x450x40, 8 sườn d12, 16 bu lông neo Ø56"
     for m in members:
         m["mass_kg"] = round(m["A_cm2"] * 1e-4 * m["length"] * 7850, 3)
     zs = [c for m in members for c in (m["p1"][2], m["p2"][2])]
@@ -523,7 +611,11 @@ def main(dxf, outdir):
     chk = {"cad": [[[(sg["a"][0] - xc) * SC, zf(sg["a"][1])], [(sg["b"][0] - xc) * SC, zf(sg["b"][1])], sg["k"]]
                    for sg in segs],
            "plates": [[[(q[0] - xc) * SC, zf(q[1])] for q in pl["pts"]] for pl in plates2d],
-           "bolts": [[(b["p"][0] - xc) * SC, zf(b["p"][1])] for b in bolts2d], "plans": plan_chk}
+           "bolts": [[(b["p"][0] - xc) * SC, zf(b["p"][1])] for b in bolts2d], "plans": plan_chk,
+           "dropped_bolts": [[(q[0] - xc) * SC, zf(q[1])] for q in rep.pop("bolts_dropped_pts", [])],
+           "no_host": [{"section": m["section"], "p1": [(m["c1"][0] - xc) * SC, zf(m["c1"][1])],
+                        "p2": [(m["c2"][0] - xc) * SC, zf(m["c2"][1])], "side": "NGOAI" if m["out"] else "TRONG"}
+                       for m in rep.pop("no_host", [])]}
     (out / "dt02_check.json").write_text(json.dumps(chk))
     print(json.dumps(rep, ensure_ascii=False, indent=1)[:3000])
     return scene
