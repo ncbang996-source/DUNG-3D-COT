@@ -103,3 +103,7 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   trên chiều dài thanh không ghi trên bản vẽ và không cần thể hiện. Mô hình: mỗi đầu thanh có độ sâu riêng = mặt tiếp
   xúc, thanh nối thẳng giữa hai đầu (xiên tối đa 0,16° với L90x7 dài 6,6 m; 0,9° với thanh ngắn nhất 836 mm);
   sai lệch mặt tiếp xúc trên vùng bu lông < 1 mm.
+- Đầu thanh tối thiểu = tim bu lông ngoài cùng + khoảng cách tới đầu thanh (25/30/40) khi nét vẽ đầu thanh bị khuất
+  sau thanh cánh (32 đầu thanh được kéo dài; thanh ngang giờ tới cách lưng thanh cánh 55 mm).
+- Thanh giằng vách đặt TRÊN cánh nằm ngang của thanh ngang mặt cột (theo mặt cắt, bắt 1.16_40); bu lông kẹp
+  thanh giằng + cánh ngang.

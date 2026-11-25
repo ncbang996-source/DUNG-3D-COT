@@ -353,7 +353,7 @@ def main(dxf, outdir):
         if e.dxf.name not in ("1", "2", "3") or not inb(e.dxf.insert):
             continue
         q = (e.dxf.insert[0], e.dxf.insert[1])
-        if (q[1] - base_y) * SC < 560 and any(dist_line(q, L_["w1"], L_["w2"]) < 12 for L_ in legs):
+        if (q[1] - base_y) * SC < 560 and any(dist_line(q, L_["w1"], L_["w2"]) < 16 for L_ in legs):
             continue                                   # chân cột: lấy đúng theo lỗ trên chi tiết sườn
         best = None
         for m in keep:
@@ -387,6 +387,32 @@ def main(dxf, outdir):
         L_b, need = bolt_len(q, dmm, hi - lo)
         bolts2d.append({"p": q, "delta": dl, "d": dmm, "lo": lo, "hi": hi, "L": L_b or math.ceil(need / 10) * 10,
                         "L_from": "ký hiệu bản vẽ" if L_b else "tính (không thấy ký hiệu)"})
+
+    # --- đầu thanh: tối thiểu = tim bu lông ngoài cùng + khoảng cách tới đầu thanh (thanh giằng 25/30/40 mm cho
+    #     M16/M20/M24 - ghi chú chung). Cần khi phần đầu thanh nằm sau thanh cánh, nét vẽ bị khuất/không vẽ.
+    ED = {16: 25.0, 20: 30.0, 24: 40.0}
+    rep["ends_extended"] = 0
+    for m in keep:
+        c1, c2 = m["c1"], m["c2"]
+        L = math.dist(c1, c2)
+        u_ = ((c2[0] - c1[0]) / L, (c2[1] - c1[1]) / L)
+        sof = lambda p_: (p_[0] - c1[0]) * u_[0] + (p_[1] - c1[1]) * u_[1]
+        on = [(sof(b["p"]), b["d"]) for b in bolts2d if dist_seg(b["p"], c1, c2)[0] < 3.0]
+        s1, s2 = sof(m["b1"]), sof(m["b2"])
+        lo_side = [x for x in on if x[0] < (s1 + s2) / 2]
+        hi_side = [x for x in on if x[0] >= (s1 + s2) / 2]
+        if lo_side:
+            sb, dd = min(lo_side)
+            need = sb - ED[dd] / SC
+            if need < s1 - 0.04:
+                m["b1"] = (c1[0] + u_[0] * need, c1[1] + u_[1] * need)
+                rep["ends_extended"] += 1
+        if hi_side:
+            sb, dd = max(hi_side)
+            need = sb + ED[dd] / SC
+            if need > s2 + 0.04:
+                m["b2"] = (c1[0] + u_[0] * need, c1[1] + u_[1] * need)
+                rep["ends_extended"] += 1
 
     # --- chiếu sang 3D (mặt trước y = -h), xoay 4 mặt
     def to3(p, delta_mm=0.0):
@@ -592,6 +618,45 @@ def main(dxf, outdir):
                     "g": [m["heel_to_center"] or s_["b"] / 2, 0.0], "group": 3, "bolts": {}, "bolt": None,
                     "node1": None, "node2": None, "face_k": -1, "x_pair": False, "default_up": up,
                     "side": "LEN" if up else "XUONG", "plan": pname})
+    # thanh vách đặt TRÊN (hoặc dưới) cánh nằm ngang của thanh ngang mặt cột mà nó bắt vào (theo mặt cắt)
+    face_h = [m for m in members if m["rule"] == "face" and m["type"] == "G"]
+
+    def seg_d3(p_, a_, b_):
+        a_, b_, p_ = np.asarray(a_), np.asarray(b_), np.asarray(p_)
+        ab = b_ - a_
+        t_ = np.clip(np.dot(p_ - a_, ab) / max(np.dot(ab, ab), 1e-12), 0, 1)
+        return np.linalg.norm(p_ - (a_ + t_ * ab))
+    rep["plan_ends_on_flange"] = 0
+    for pm_ in plan_members:
+        tm = sec(pm_["section"])["t"] / 1000
+        for key in ("p1", "p2"):
+            P_ = np.array(pm_[key])
+            best = None
+            for fh in face_h:
+                a_ = np.array(fh["p1"]) + np.array(fh["poff1"]); b_ = np.array(fh["p2"]) + np.array(fh["poff2"])
+                if abs(a_[2] - P_[2]) > 0.2:
+                    continue
+                dd = seg_d3(P_ * [1, 1, 0] + [0, 0, a_[2]], a_, b_)
+                if dd < 0.15 and (best is None or dd < best[0]):
+                    best = (dd, fh, a_[2])
+            if best is None:
+                continue
+            fh, zax = best[1], best[2]
+            e1h = np.array(fh["frames"]["bv"][0])
+            th = sec(fh["section"])["t"] / 1000
+            gh = fh["g"][0] / 1000
+            heel_up = -e1h[2] > 0
+            if heel_up:
+                z_top = zax + gh                          # mặt trên cánh nằm ngang (lưng ở trên)
+                zc = z_top if pm_["default_up"] else z_top - th
+            else:
+                z_bot = zax - gh
+                zc = z_bot + th if pm_["default_up"] else z_bot
+            pm_[key] = [pm_[key][0], pm_[key][1], round(zc, 5)]
+            pm_.setdefault("contact", {})[key] = {"z": zc, "t_host": th * 1000}
+            rep["plan_ends_on_flange"] += 1
+        pm_["length"] = round(float(np.linalg.norm(np.array(pm_["p2"]) - np.array(pm_["p1"]))), 4)
+
     # bỏ trùng (mặt cắt vẽ cả 2 phía tâm thì xoay sẽ trùng)
     seen = set()
     for m in plan_members:
@@ -612,9 +677,25 @@ def main(dxf, outdir):
                 continue
             seenb.add(key)
             # thanh vách nằm ngang: đầu bu lông phía trên, đai ốc phía dưới; kẹp 2 cánh nằm ngang
+            # bu lông nằm ở đầu thanh vách: đầu bu lông ở mặt trên lớp thép trên cùng, kẹp thanh vách + cánh ngang
             ph = p + np.array([0, 0, 0.006])
+            bestp = None
+            for pm_ in plan_members:
+                for key in ("p1", "p2"):
+                    P_ = np.array(pm_[key])
+                    dxy = np.linalg.norm((P_ - p)[:2])
+                    if dxy < 0.15 and (bestp is None or dxy < bestp[0]):
+                        bestp = (dxy, pm_, key)
+            grip_ = 12
+            if bestp and "contact" in bestp[1] and bestp[2] in bestp[1]["contact"]:
+                pm_, key = bestp[1], bestp[2]
+                c_ = pm_["contact"][key]
+                tm = sec(pm_["section"])["t"]
+                top = c_["z"] + (tm / 1000 if pm_["default_up"] else 0)
+                ph = np.array([p[0], p[1], top])
+                grip_ = tm + c_["t_host"]
             bolts.append({"id": 0, "p": ph.round(5).tolist(), "axis": [0, 0, -1.0], "nut": [0, 0, -1.0],
-                          "d_mm": dmm, "grip_mm": 12, "L_mm": Lp or 40,
+                          "d_mm": dmm, "grip_mm": grip_, "L_mm": Lp or 40,
                           "L_from": "ký hiệu bản vẽ" if Lp else "tính", "t_mm": 8, "kind": "plan"})
     for (Q, z) in plan_plates:
         for k in range(4):
