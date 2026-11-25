@@ -99,3 +99,7 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   sườn + thanh xiên chính áp mặt trong sườn).
 - Vát cánh theo ghi chú: 40x60 đầu dưới thanh xiên chính (bắt sườn chân cột); 45x45 thanh ngang L80x6 tại bản mã giữa;
   30x30 (mặt cắt 1-1, 3-3, 4-4) và 45x45 (2-2) ở cánh nằm ngang của thanh ngang mặt cột tại thanh cánh.
+- Quy tắc (người dùng xác nhận): ở liên kết, thanh luôn ÉP SÁT bản mã/thanh chủ, mặt tiếp xúc trùng khít; độ uốn nhẹ
+  trên chiều dài thanh không ghi trên bản vẽ và không cần thể hiện. Mô hình: mỗi đầu thanh có độ sâu riêng = mặt tiếp
+  xúc, thanh nối thẳng giữa hai đầu (xiên tối đa 0,16° với L90x7 dài 6,6 m; 0,9° với thanh ngắn nhất 836 mm);
+  sai lệch mặt tiếp xúc trên vùng bu lông < 1 mm.
