@@ -266,10 +266,14 @@ def main(dxf, outdir):
                     continue
                 kind, h = m["host"][k]
                 pl = m["plate"][k]
-                if pl is not None and pl["delta0"] is not None:
+                pk = pt_k(m, k)
+                in_base = (pk[1] - min(Lg["a"][1], Lg["b"][1])) * SC < 560 and \
+                    any(dist_line(pk, L_["w1"], L_["w2"]) < 12 for L_ in legs)
+                if in_base:
+                    # chân cột: đầu thanh ép sát sườn d12 (sườn nằm ngoài lưng cánh thanh cánh, mặt trong δ = g)
+                    lo, hi = gl, gl + 12
+                elif pl is not None and pl["delta0"] is not None:
                     lo, hi = pl["delta0"], pl["delta0"] + pl["t"]
-                elif kind == "leg" and (pt_k(m, k)[1] - min(Lg["a"][1], Lg["b"][1])) * SC < 560:
-                    lo, hi = gl, gl + 12                     # chân cột: thanh bắt vào sườn d12 (ngoài cánh thanh cánh)
                 elif kind == "leg":
                     lo, hi = gl - tl, gl
                 elif kind == "brace" and h is not None and any(v is not None for v in h["delta"]):
