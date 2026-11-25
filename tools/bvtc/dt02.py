@@ -362,7 +362,8 @@ def main(dxf, outdir):
                         "auto_variant": "leg", "frames": {}, "offs": {}, "group": 1, "bolts": {}, "bolt": None,
                         "node1": None, "node2": None, "face_k": k, "side": "thanh cánh"})
         for m in keep:
-            P1, P2 = Rk @ to3(m["c1"])[0], Rk @ to3(m["c2"])[0]
+            # đầu thanh THẬT theo nét bản vẽ (đã cách bu lông ngoài cùng đúng khoảng cách), không kéo tới nút
+            P1, P2 = Rk @ to3(m["b1"])[0], Rk @ to3(m["b2"])[0]
             u = unit(P2 - P1)
             nn = unit(n - np.dot(n, u) * u)
             hv = m["heel_dir"]
@@ -440,8 +441,8 @@ def main(dxf, outdir):
             if m["width"] >= 120:
                 continue
             # mặt bằng: thanh vẽ toàn nét khuất là thanh nằm DƯỚI thanh khác, vẫn giữ
-            q1 = ((m["c1"][0] - cxp) * SC - h, (m["c1"][1] - cyp) * SC - h)     # mm, gốc = tâm cột
-            q2 = ((m["c2"][0] - cxp) * SC - h, (m["c2"][1] - cyp) * SC - h)
+            q1 = ((m["b1"][0] - cxp) * SC - h, (m["b1"][1] - cyp) * SC - h)     # mm, gốc = tâm cột, đầu thanh thật
+            q2 = ((m["b2"][0] - cxp) * SC - h, (m["b2"][1] - cyp) * SC - h)
             ax_ = unit([q2[0] - q1[0], q2[1] - q1[1], 0])
             on_face = (abs(ax_[1]) > 0.999 and abs(q1[0] + h) < 120 and abs(q2[0] + h) < 120) or \
                       (abs(ax_[0]) > 0.999 and abs(q1[1] + h) < 120 and abs(q2[1] + h) < 120)
@@ -556,44 +557,77 @@ def main(dxf, outdir):
                            "area_m2": round(area, 5), "mass_kg": round(area * 8 / 1000 * 7850, 2),
                            "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0, "reason": "bản vẽ DT-02 (mặt cắt)"})
 
-    # --- chân cột (chi tiết bản đế, tờ DT-02): bản đế 450x450 dày 40, 4 bu lông neo Ø56 cách mép 100,
-    #     2 sườn dày 12 hàn sát lưng 2 cánh thanh cánh, dài 515, cao 420 (vát về 100 ở hai đầu)
-    h0 = halfw(y0) / 1000
-    g = Lg["g"] / 1000
+    # --- chân cột: số liệu đọc từ DXF (tờ DT-02, chi tiết tỉ lệ 1/10)
+    # Sườn d12 (đường bao lớp Banma, mm, gốc = góc dưới-trái hình chi tiết):
+    RIB1 = [(0, 100), (0, 0), (545, 0), (545, 350), (435, 490), (220, 490)]      # 13 lỗ: 10 thanh cánh + 3 thanh xiên
+    RIB2 = [(0, 100), (0, 0), (157, 0), (192, 30), (260, 490), (220, 490)]      # không lỗ, cắt góc 30x30
+    RIB3 = [(0, 30), (30, 0), (345, 0), (345, 350), (235, 490), (73, 490)]      # 13 lỗ
+    # Vị trí (khớp lỗ sườn với bu lông chân thanh cánh trên mặt đứng, lệch <= 5 mm):
+    #   sườn 1 nằm trên cánh thanh cánh ở mặt đang xét (thanh cánh trái): x = -3971 + u, đáy sườn z = 11
+    #   sườn 3 trên cánh thứ hai (thấy ở thanh cánh phải, đối xứng gương):  x = 3771 - u
+    #   => góc lưng thanh cánh ở |x| = 3771; mặt bằng bản đế: lưng cách mép ngoài 200, bản 450x450x40,
+    #      sườn 1 bắt đầu từ mép bản (3771 + 200 = 3971 khớp); sườn 2 nối tiếp sườn 3 ra ngoài, sau sườn 1.
+    HEEL = 3771.0
+    Z0 = 11.0
+    T_RIB = 12.0
+    rib_specs = [(RIB1, lambda u: -3971.0 + u, "sườn 1 (545x490, 13 lỗ)"),
+                 (RIB3, lambda u: HEEL - u, "sườn 3 (345x490, 13 lỗ)"),
+                 (RIB2, lambda u: HEEL + T_RIB + (260 - u), "sườn 2 (260x490, không lỗ; mặt bằng ghi 188 - cần kiểm)")]
+    h_base = halfw(y0)
+    rep["base_heel_minus_working_mm"] = round(HEEL - h_base, 1)
     for k in range(4):
         Rk = rot(k)
-        heel = np.array([-h0 - g, -h0 - g, 0.0])
-        ex_, ey_, ez_ = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
-        corner = heel - 0.225 * ex_ - 0.225 * ey_
-        P0 = Rk @ corner
-        plates.append({"kind": "gusset", "node": (Rk @ heel).round(4).tolist(), "members": [], "t_mm": 40,
-                       "on_leg": False, "origin": P0.round(5).tolist(), "a1": (Rk @ ex_).round(6).tolist(),
+        n = Rk @ nf
+        tu = Rk @ tup
+        for poly, xf, label in rib_specs:
+            pts3 = []
+            for u, v in poly:
+                xface = xf(u)
+                p = np.array([xface, -h_base, Z0]) / 1000 + tu * v / 1000 + nf * gl / 1000
+                pts3.append(Rk @ p)
+            o = pts3[0]
+            a1 = Rk @ ex
+            poly2 = [[round(float(np.dot(q - o, a1)), 5), round(float(np.dot(q - o, tu)), 5)] for q in pts3]
+            area = abs(sum(poly2[i][0] * poly2[(i + 1) % len(poly2)][1] - poly2[(i + 1) % len(poly2)][0] * poly2[i][1]
+                           for i in range(len(poly2)))) / 2
+            plates.append({"kind": "gusset", "node": o.round(4).tolist(), "members": [], "t_mm": T_RIB,
+                           "on_leg": True, "origin": o.round(5).tolist(), "a1": a1.round(6).tolist(),
+                           "a2": tu.round(6).tolist(), "thick_dir": n.round(6).tolist(), "poly": poly2,
+                           "area_m2": round(area, 5), "mass_kg": round(area * T_RIB / 1000 * 7850, 2),
+                           "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0, "reason": "chân cột: " + label})
+        # bản đế 450x450x40: lưng thanh cánh tại (200, 200) tính từ góc ngoài; 4 lỗ neo Ø64 tại 100/350
+        heel3 = np.array([-HEEL, -HEEL, 0.0]) / 1000
+        ex_, ey_ = np.array([1.0, 0, 0]), np.array([0, 1.0, 0])
+        corner = heel3 - 0.2 * ex_ - 0.2 * ey_
+        plates.append({"kind": "gusset", "node": (Rk @ heel3).round(4).tolist(), "members": [], "t_mm": 40,
+                       "on_leg": False, "origin": (Rk @ corner).round(5).tolist(), "a1": (Rk @ ex_).round(6).tolist(),
                        "a2": (Rk @ ey_).round(6).tolist(), "thick_dir": [0, 0, -1.0],
                        "poly": [[0, 0], [0.45, 0], [0.45, 0.45], [0, 0.45]], "area_m2": 0.2025,
                        "mass_kg": round(0.2025 * 0.04 * 7850, 2), "bolt_max": 4, "d_max_mm": 56, "leg_bolts": 0,
-                       "reason": "bản đế chân cột (chi tiết DT-02): 450x450x40"})
-        rib = [[0, 0], [0.515, 0], [0.515, 0.10], [0.29, 0.42], [0.225, 0.42], [0, 0.10]]
-        # sườn bắt bu lông vào cánh thanh cánh (7x40) -> nằm trong mặt phẳng lưng cánh, nghiêng theo thanh cánh
-        ul = unit(np.array([to3(Lg["b"])[0][0] - to3(Lg["a"])[0][0], to3(Lg["b"])[0][1] - to3(Lg["a"])[0][1],
-                            to3(Lg["b"])[0][2] - to3(Lg["a"])[0][2]]))
-        for along, normal in ((ex_, -ey_), (ey_, -ex_)):
-            o = heel - 0.225 * along
-            up_ = unit(ul - np.dot(ul, along) * along)              # hướng lên trong mặt phẳng cánh
-            up_ = up_ / up_[2]                                       # giữ cao độ thật (0,42 m theo phương đứng)
-            nrm = unit(np.cross(along, up_))
-            if np.dot(nrm, normal) < 0:
-                nrm = -nrm
-            plates.append({"kind": "gusset", "node": (Rk @ heel).round(4).tolist(), "members": [], "t_mm": 12,
-                           "on_leg": False, "origin": (Rk @ o).round(5).tolist(), "a1": (Rk @ along).round(6).tolist(),
-                           "a2": (Rk @ up_).round(6).tolist(), "thick_dir": (Rk @ nrm).round(6).tolist(), "poly": rib,
-                           "area_m2": 0.155, "mass_kg": round(0.155 * 0.012 * 7850, 2), "bolt_max": 0,
-                           "d_max_mm": 0, "leg_bolts": 0, "reason": "sườn chân cột d12 (chi tiết DT-02, kích thước gần đúng)"})
-        for dx in (-0.125, 0.125):
-            for dy in (-0.125, 0.125):
-                p = Rk @ (heel + dx * ex_ + dy * ey_ + np.array([0, 0, 0.0]))
+                       "reason": "bản đế 450x450x40 (chi tiết DT-02)"})
+        for du in (0.1, 0.35):
+            for dv in (0.1, 0.35):
+                p = Rk @ (corner + du * ex_ + dv * ey_)
                 bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": [0, 0, 1.0], "nut": [0, 0, 1.0],
                               "d_mm": 56, "t_mm": 40, "kind": "neo"})
-    rep["base"] = "4 bản đế 450x450x40, 8 sườn d12, 16 bu lông neo Ø56"
+    rep["base"] = "4 bản đế 450x450x40, 12 sườn d12 (đúng hình chi tiết), 16 bu lông neo Ø56"
+
+    # --- bỏ bu lông mặt cắt không nằm trên thanh nào (cách trục thanh > 100 mm)
+    def seg_d(p, a_, b_):
+        a_, b_, p = np.asarray(a_), np.asarray(b_), np.asarray(p)
+        ab = b_ - a_
+        t = np.clip(np.dot(p - a_, ab) / max(np.dot(ab, ab), 1e-12), 0, 1)
+        return np.linalg.norm(p - (a_ + t * ab))
+    axes = [(np.array(m["p1"]) + np.array(m.get("poff1", [0, 0, 0])), np.array(m["p2"]) + np.array(m.get("poff2", [0, 0, 0])))
+            for m in members]
+    keepb, lostb = [], 0
+    for b_ in bolts:
+        if b_["kind"] == "plan" and min(seg_d(b_["p"], a_, c_) for a_, c_ in axes) > 0.10:
+            lostb += 1
+            continue
+        keepb.append(b_)
+    bolts[:] = keepb
+    rep["plan_bolts_floating_removed"] = lostb
     for m in members:
         m["mass_kg"] = round(m["A_cm2"] * 1e-4 * m["length"] * 7850, 3)
     zs = [c for m in members for c in (m["p1"][2], m["p2"][2])]

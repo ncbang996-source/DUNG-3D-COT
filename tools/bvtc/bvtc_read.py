@@ -113,6 +113,17 @@ def members(doc, msp, box, labels=None):
         _, sref = _rel(ref, ref)
         c1 = (ref["a"][0] + ax[0] * sref[0], ref["a"][1] + ax[1] * sref[0])
         c2 = (ref["a"][0] + ax[0] * sref[1], ref["a"][1] + ax[1] * sref[1])
+        # đầu thanh THẬT: phạm vi các nét mép (không tính đường tâm, đường tâm vẽ kéo tới nút)
+        se = [sp for (o, sp), k in items if k != "A" and min(sp[1], sr[1]) - max(sp[0], sr[0]) >= 0.3 * Lr]
+        if se:
+            e0, e1_ = min(x[0] for x in se), max(x[1] for x in se)
+        else:
+            e0, e1_ = smin, smax
+        b1 = (ref["a"][0] + ax[0] * e0, ref["a"][1] + ax[1] * e0)
+        b2 = (ref["a"][0] + ax[0] * e1_, ref["a"][1] + ax[1] * e1_)
+        # đặt b1 cùng phía c1
+        if math.dist(b1, c1) > math.dist(b1, c2):
+            b1, b2 = b2, b1
         hv = None
         if heel:
             hv = nx if heel == "hi" else (-nx[0], -nx[1])
@@ -120,7 +131,7 @@ def members(doc, msp, box, labels=None):
         cofs = sorted({round(o * SC, 1) for (o, _), k in items if k == "A"})
         out.append({
             "nvec": nx, "heel_signed": heel_off,
-            "ang": math.degrees(ref["ang"]), "p1": p1, "p2": p2, "c1": c1, "c2": c2,
+            "ang": math.degrees(ref["ang"]), "p1": p1, "p2": p2, "c1": c1, "c2": c2, "b1": b1, "b2": b2,
             "width": round(hi - lo), "heel_dir": hv, "heel_to_center": (abs(heel_off) if heel else None),
             "vis": vis, "tline": tline, "centers_rel": cofs, "edges": "".join(k for _, k in ed),
             "all_hidden": all(k == "H" for _, k in ed),

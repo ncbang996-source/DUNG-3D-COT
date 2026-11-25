@@ -85,5 +85,10 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   hình khai triển thanh cánh (17) - xem `docs/DT-02_chu_thich.png`.
 - Thanh L60x5 dựng đứng trong khoang K trên (từ thanh ngang L80x6 z=5,8 m lên thanh xiên L90x7 z=7,6 m):
   đầu thanh cách đường tim thanh chủ 35-50 mm (bản vẽ ghi) -> dung sai tìm thanh chủ 62 mm.
-- Chân cột (chi tiết DT-02): bản đế 450x450x40, 4 bu lông neo Ø56 (lỗ Ø64) cách mép 100, 2 sườn d12 áp lưng 2 cánh
-  thanh cánh, nghiêng theo thanh cánh (hình sườn lấy gần đúng 515 x 420, vát về 100 hai đầu).
+- Đầu thanh = đầu thanh THẬT vẽ trên bản vẽ (đã cách bu lông ngoài cùng đúng khoảng cách), không kéo tới nút
+  lý thuyết -> hết thanh đâm xuyên nhau ở nút.
+- Chân cột: đọc đúng từ DXF (chi tiết 1/10): bản đế 450x450x40, lưng thanh cánh cách mép ngoài 200; 4 lỗ neo Ø64
+  tại 100/350; sườn 1 (545x490, 13 lỗ), sườn 3 (345x490, 13 lỗ), sườn 2 (260x490, không lỗ). Vị trí sườn 1, 3
+  khớp lỗ với bu lông chân thanh cánh trên mặt đứng (lệch <= 5 mm); suy ra lưng thanh cánh cách đường tim 79,5 mm
+  (bản vẽ ghi 80). Chưa khớp: sườn 2 rộng 260 theo chi tiết nhưng mặt bằng bản đế chỉ vẽ 188.
+- Bỏ 24 bu lông mặt cắt không nằm trên thanh nào (cách trục > 100 mm).
