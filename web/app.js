@@ -103,7 +103,7 @@ function clipBelow(poly, h) {
 
 function buildGeometry(m) {
   const s = sections[m.section];
-  const chamfer = !!m.chamfer;
+  const chamfer = !!(m.chamfer1 || m.chamfer2);
   // thanh vát: phần cánh không khoan lỗ cao hơn h0 = t + r1 dựng riêng (hình thang), profile cắt tại h0
   const prof = chamfer ? clipBelow(s.profile, s.t + s.r1) : s.profile;   // mm, heel at origin
   const [g1, g2] = m.g;                              // mm
@@ -126,13 +126,14 @@ function buildGeometry(m) {
   for (const [a, b, c] of tris) { push(r0[a], r0[c], r0[b]); push(r1[a], r1[b], r1[c]); }
   if (chamfer) {
     // cánh không khoan lỗ (dọc s2, dày theo s1): hình thang vát 45° hai đầu, từ chiều cao h0 tới b
-    const h0 = s.t + s.r1, L = p1.distanceTo(p2) * 1000, c = Math.min(s.b - h0, L / 2);
+    const h0 = s.t + s.r1, L = p1.distanceTo(p2) * 1000, cmax = Math.min(s.b - h0, L / 2);
+    const c1 = m.chamfer1 ? cmax : 0, c2 = m.chamfer2 ? cmax : 0;   // chỉ vát ở đầu thanh thật
     const u = p2.clone().sub(p1).normalize();
     const P = (x, a, b) => {
       const t = x / L;                 // x tính từ p1 (mm); nội suy p1-p2 để giữ độ dịch từng đầu
       return p1.clone().lerp(p2, t).addScaledVector(e1, (a - g1) / 1000).addScaledVector(e2, (b - g2) / 1000);
     };
-    const quad = [[0, h0], [L, h0], [L - c, h0 + c], [c, h0 + c]];  // (x, s2)
+    const quad = [[0, h0], [L, h0], [L - c2, h0 + cmax], [c1, h0 + cmax]];  // (x, s2)
     const A0 = quad.map(([x, b]) => P(x, 0, b)), A1 = quad.map(([x, b]) => P(x, s.t, b));
     for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; push(A0[i], A0[j], A1[j], A0[i], A1[j], A1[i]); }
     push(A0[0], A0[2], A0[1], A0[0], A0[3], A0[2], A1[0], A1[1], A1[2], A1[0], A1[2], A1[3]);

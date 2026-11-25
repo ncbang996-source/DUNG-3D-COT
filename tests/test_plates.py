@@ -75,7 +75,8 @@ def test_bolt_spacing(scene):
         if m["type"] in ("C", "CĐ"):
             continue
         n, d = m["bolt"]["count"], m["bolt"]["d_mm"]
-        n_ends = sum(1 for k in ("p1", "p2") if tuple(m[k]) not in cross)
+        th = PL.through_index(scene["members"])
+        n_ends = sum(1 for k in ("p1", "p2") if tuple(m[k]) not in cross and th.get((m["id"], k)) != "same")
         pts = by.get(m["id"], [])
         assert len(pts) == n * n_ends
         for k in range(n_ends):
@@ -90,3 +91,19 @@ def test_nut_outward(scene):
         r = np.array([p[0], p[1], 0.0])
         if np.linalg.norm(r) > 1e-6 and abs(np.dot(nut, r / np.linalg.norm(r))) > 0.3:
             assert np.dot(nut, r) > 0                                   # đai ốc ra ngoài cột
+
+
+def test_no_chamfer_no_bolts_where_bar_continues(scene):
+    """Không vát, không bu lông đầu thanh ở nút mà thanh thép liền qua (DXF chỉ chia đoạn)."""
+    th = PL.through_index(scene["members"])
+    cross = {tuple(p["node"]) for p in scene["plates"] if p["kind"] == "filler"}
+    for m in scene["members"]:
+        for k, f in (("p1", "chamfer1"), ("p2", "chamfer2")):
+            if (m["id"], k) in th or (m.get("x_pair") and tuple(m[k]) in cross):
+                assert m[f] is False, (m["id"], k)
+    # ví dụ khung đỏ: 561 (L90X7) nối thẳng 585 (L90X7) tại (-1.2436, -2.4464, 21.4)
+    assert th[(561, "p2")] == "same" and th[(585, "p1")] == "same"
+    node = np.array([-1.2436, -2.4464, 21.4])
+    for b in scene["bolts"]:
+        if b["kind"] == "member" and b["id"] in (561, 585):
+            assert np.linalg.norm(np.array(b["p"]) - node) > 0.2

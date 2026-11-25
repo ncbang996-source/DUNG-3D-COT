@@ -324,6 +324,37 @@ def solve(model, lib, overrides=None, check_clash=True):
     xout = x_members(model, body)
     log["x_members"] = {"outside": sorted(i for i, o in xout.items() if o[0]),
                         "inside": sorted(i for i, o in xout.items() if not o[0])}
+    # Thanh liền: các đoạn cùng tiết diện, thẳng hàng, nối qua nút (DXF chỉ chia đoạn) -> MỘT thanh,
+    # dùng chung hướng (nếu có đoạn nằm NGOÀI thì cả thanh nằm ngoài) và chung chuẩn thanh cánh.
+    parent = {m["id"]: m["id"] for m in others}
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    ax = lambda m: unit(np.subtract(m["p2"], m["p1"]))
+    nodes_of: dict[tuple, list] = {}
+    for m in others:
+        for k in ("p1", "p2"):
+            nodes_of.setdefault(tuple(m[k]), []).append(m)
+    for ms in nodes_of.values():
+        for i, a in enumerate(ms):
+            for b in ms[i + 1:]:
+                if a["section"] == b["section"] and abs(abs(np.dot(ax(a), ax(b))) - 1) < 1e-4:
+                    parent[find(a["id"])] = find(b["id"])
+    chains: dict[int, list] = {}
+    for m in others:
+        chains.setdefault(find(m["id"]), []).append(m["id"])
+    chain_of = {i: c for c in chains.values() for i in c}
+    chain_out = {i: any(xout.get(j, (False, 0))[0] for j in chain_of[i]) for i in chain_of}
+    chain_zref = {}
+    for c in chains.values():
+        zx = [xout[j][1] for j in c if j in xout]
+        if zx:
+            for j in c:
+                chain_zref[j] = min(zx)
+    log["chains"] = [sorted(c) for c in chains.values() if len(c) > 1]
     leg_nodes = {round(p[2], 4): None for m in legs for p in (m["p1"], m["p2"])}
     leg_pts = {tuple(p) for m in legs for p in (m["p1"], m["p2"])}
     log["endpoint_shift"] = []
@@ -340,14 +371,14 @@ def solve(model, lib, overrides=None, check_clash=True):
             # Tiết diện thanh cánh làm chuẩn ép sát:
             #  - cụm chữ X: thanh cánh tại cao độ nút giao (cả 4 nửa thanh cùng một chuẩn);
             #  - thanh khác: thanh cánh tại đầu thanh bắt vào thanh cánh (nếu có), không thì trung điểm.
-            if m["id"] in xout:
-                zref = xout[m["id"]][1]
+            if m["id"] in chain_zref:
+                zref = chain_zref[m["id"]]
             else:
                 on_leg = [p[2] for p in (m["p1"], m["p2"]) if tuple(p) in leg_pts]
                 zref = min(on_leg) if on_leg else (m["p1"][2] + m["p2"][2]) / 2
             bc, tc = leg_section_at(model, lib, zref)
             offs = {v: n * ((bc / 2 - tc) if v.startswith("in") else bc / 2) for v in VARIANTS}
-            outside = xout.get(m["id"], (False, 0))[0]
+            outside = chain_out.get(m["id"], False)
             side = "out" if outside else "in"
             allowed = [side + "+", side + "-"]
             info = {**info, "x_pair": m["id"] in xout, "leg_b": bc, "leg_t": tc, "leg_ref_z": zref}
@@ -429,6 +460,29 @@ def solve(model, lib, overrides=None, check_clash=True):
             placed[m["id"]] = build_solid(m, frs[m["id"]], v)
             frs_all[m["id"]], infos_all[m["id"]] = frs[m["id"]], infos[m["id"]]
             result[m["id"]] = {"variant": v}
+
+    # Thanh liền: thống nhất phía góc lưng theo đoạn dẫn (đoạn thuộc cặp chữ X, không thì id nhỏ nhất)
+    log["chain_unified"] = []
+    for c in chains.values():
+        if len(c) < 2:
+            continue
+        lead = min(c, key=lambda j: (j not in xout, infos_all[j]["rule"] != "face", j))
+        v = result[lead]["variant"]
+        for j in c:
+            if j in overrides or j == lead:
+                continue
+            if infos_all[j]["rule"] != infos_all[lead]["rule"]:
+                # đoạn nối dài ra ngoài mặt cột (vd vào xà): theo khung và độ dịch của đoạn dẫn
+                for vv in VARIANTS:
+                    e1, e2 = frs_all[lead][vv]
+                    frs_all[j][vv] = (e1, e2)
+                frs_all[j]["_offs"] = dict(frs_all[lead]["_offs"])
+                infos_all[j] = {**infos_all[j], "follows": lead}
+            elif result[j]["variant"] == v:
+                continue
+            log["chain_unified"].append({"id": j, "from": result[j]["variant"], "to": v, "lead": lead})
+            result[j]["variant"] = v
+            placed[j] = build_solid(by_id[j], frs_all[j], v)
 
     # Thanh vẫn cấn (không phải thanh mặt cột): dời điểm bắt dọc thanh bị cấn, 3d làm tròn lên 5 mm.
     if check_clash:
@@ -532,6 +586,7 @@ def main(out: Path, override_path=None):
     print(f"Đổi phía góc lưng   : {fmt(log['heel_swapped'])}")
     print(f"Lật (vách ngang/xà) : {fmt(log['flipped_out'])}")
     print(f"Cặp chữ X           : {len(log['x_members']['outside'])} thanh ngoài, {len(log['x_members']['inside'])} thanh trong")
+    print(f"Thanh liền (nhiều đoạn): {len(log['chains'])}, đoạn đổi hướng cho thống nhất: {len(log['chain_unified'])}")
     print(f"Ghi đè từ CSV       : {log['overridden'] or 'không'}")
     sc = {s["id"]: s for s in scene}
 

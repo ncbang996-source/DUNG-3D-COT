@@ -92,6 +92,30 @@ def member_geom(m):
     return p1 + off, p2 + off, unit(p2 - p1), e1, e2
 
 
+def through_index(members):
+    """{(id, 'p1'|'p2'): 'same' | 'diff'} cho đầu thanh có đoạn khác nối THẲNG HÀNG qua nút.
+    'same' = cùng tiết diện -> coi là MỘT thanh liền (DXF chỉ chia đoạn): không vát, không bu lông đầu thanh.
+    'diff' = khác tiết diện -> mối nối thật: vẫn bu lông, nhưng không vát."""
+    by_node: dict[tuple, list] = {}
+    for m in members:
+        for k in ("p1", "p2"):
+            by_node.setdefault(tuple(m[k]), []).append(m)
+    ax = lambda m: unit(np.subtract(m["p2"], m["p1"]))
+    res = {}
+    for m in members:
+        if m["type"] in LEG_TYPES:
+            continue
+        for k in ("p1", "p2"):
+            for o in by_node[tuple(m[k])]:
+                if o["id"] == m["id"] or o["type"] in LEG_TYPES:
+                    continue
+                if abs(abs(np.dot(ax(m), ax(o))) - 1) < 1e-4:
+                    kind = "same" if o["section"] == m["section"] else "diff"
+                    if res.get((m["id"], k)) != "same":
+                        res[(m["id"], k)] = kind
+    return res
+
+
 def circles_hull(pts, origin, a1, a2, r):
     circ = []
     for p in pts:
@@ -138,6 +162,8 @@ def build(scene_members, lib):
                 if tuple(m[k]) not in leg_nodes:
                     cross_nodes.setdefault(tuple(m[k]), []).append(m)
     cross_nodes = {k: v for k, v in cross_nodes.items() if len(v) >= 4}
+    through = through_index(scene_members)
+    rep["n_through_same"] = sum(1 for v in through.values() if v == "same")
 
     # 1) đầu thanh (bỏ đầu tại nút giao chữ X)
     ends = []
@@ -159,8 +185,8 @@ def build(scene_members, lib):
                                    f"mỗi đầu > nửa chiều dài {L*500:.0f} mm")
         for k, (P, dirv) in enumerate(((P1, u), (P2, -u))):
             node = tuple(m["p1"] if k == 0 else m["p2"])
-            if node in cross_nodes:
-                continue
+            if node in cross_nodes or through.get((m["id"], "p1" if k == 0 else "p2")) == "same":
+                continue                     # nút giao chữ X / thanh liền qua nút: không bu lông đầu thanh
             bolts = [P + dirv * (e0 + i * pt) for i in range(n)]
             ends.append({"id": m["id"], "end": k, "node": node, "P": P, "n": e2, "bolts": bolts,
                          "d": d, "dmm": dmm, "count": n, "t": lib[m["section"]]["t"], "rule": m["rule"],
@@ -291,12 +317,17 @@ def build(scene_members, lib):
 def apply(scene: dict, lib: dict):
     plates, bolts, end_shift, rep = build(scene["members"], lib)
     n_ch = 0
+    # Thanh giằng chéo vát góc 45° cánh không khoan lỗ (bản vẽ N122), CHỈ ở đầu thanh thật:
+    # không vát ở nút có đoạn khác nối thẳng hàng (thanh liền qua nút, hoặc mối nối thẳng).
+    through = through_index(scene["members"])
+    continues = lambda m, node: (m["id"], "p1" if tuple(m["p1"]) == node else "p2") in through
     for m in scene["members"]:
-        # Thanh giằng chéo vát góc 45° cánh không khoan lỗ (bản vẽ N122): mọi thanh không phải thanh
-        # cánh và không song song trục X/Y/Z.
         u = unit(np.subtract(m["p2"], m["p1"]))
-        m["chamfer"] = bool(m["type"] not in LEG_TYPES and np.max(np.abs(u)) < 1 - 1e-6)
-        n_ch += m["chamfer"]
+        diag = m["type"] not in LEG_TYPES and np.max(np.abs(u)) < 1 - 1e-6
+        m["chamfer1"] = bool(diag and not continues(m, tuple(m["p1"])))
+        m["chamfer2"] = bool(diag and not continues(m, tuple(m["p2"])))
+        m.pop("chamfer", None)
+        n_ch += m["chamfer1"] + m["chamfer2"]
         for k in (0, 1):
             s = end_shift.get((m["id"], k))
             if s:
@@ -314,7 +345,8 @@ def print_report(rep):
           f"theo chiều dày {rep['plates_by_t']}, khối lượng {rep['plate_mass_kg']} kg")
     print(f"Nút giao chữ X: {rep['n_cross_nodes']} nút, {rep['n_fillers']} tấm đệm 45x45 ({rep['filler_mass_kg']} kg)")
     print(f"Đầu thanh bị đẩy ra theo chiều dày bản mã: {rep['n_member_ends_shifted']}")
-    print(f"Thanh giằng chéo vát 45° hai đầu: {rep.get('n_chamfered', 0)}")
+    print(f"Đầu thanh liền qua nút (cùng tiết diện, không bu lông, không vát): {rep.get('n_through_same', 0)}")
+    print(f"Đầu thanh giằng chéo vát 45°: {rep.get('n_chamfered', 0)} (không vát chỗ thanh liền qua nút)")
     for w in rep["warnings"]:
         print("CẢNH BÁO:", w)
 

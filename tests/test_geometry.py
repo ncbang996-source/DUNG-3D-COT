@@ -63,6 +63,8 @@ def test_frames(data):
             e1, e2 = r["frames"]["in+"]
             assert abs(np.dot(e1, n)) < 1e-6                         # cánh liên kết nằm trong mặt cột
             assert np.dot(e2, n) < -0.999                            # cánh còn lại vào trong
+        elif r.get("follows"):
+            continue                                                  # đoạn nối dài theo khung đoạn dẫn
         elif r.get("vertical"):
             e1, e2 = r["frames"]["in+"]
             assert e2[1] * np.sign(m["p1"][1]) < -0.999                # chĩa về trục giữa xà
@@ -101,7 +103,8 @@ def test_face_members_against_leg_flange(data):
         n = body.normal(r["face"], m["p1"][2], m["p2"][2])
         bc, tc = OR.leg_section_at(model, lib, r["leg_ref_z"])
         off = float(np.dot(r["offs"][r["variant"]], n))
-        if m["id"] in xs["outside"]:
+        chain = next((c for c in log["chains"] if m["id"] in c), [m["id"]])
+        if any(i in xs["outside"] for i in chain):            # thanh liền với thanh X nằm ngoài
             assert r["variant"].startswith("out") and abs(off - bc / 2) < 1e-4
         else:
             assert r["variant"].startswith("in") and abs(off - (bc / 2 - tc)) < 1e-4
@@ -137,3 +140,22 @@ def test_x_pair_gap_equals_leg_thickness(data):
 
 def test_ceil5():
     assert OR.ceil5(48) == 50 and OR.ceil5(72) == 75 and OR.ceil5(60) == 60
+
+
+def test_continuous_bars_same_orientation():
+    """Thanh liền (các đoạn cùng tiết diện nối thẳng hàng): cùng hướng, cùng độ dịch -> không gãy khúc."""
+    import json
+    p = ROOT / "web" / "data" / "scene.json"
+    if not p.exists():
+        pytest.skip("chưa có web/data/scene.json")
+    sc = json.loads(p.read_text())
+    by = {m["id"]: m for m in sc["members"]}
+    chains = sc["report"]["orientation"]["chains"]
+    assert chains
+    for c in chains:
+        v = {by[i]["variant"] for i in c}
+        assert len(v) == 1, (c, v)
+        offs = [np.array(by[i]["offs"].get(by[i]["variant"], [0, 0, 0])) for i in c]
+        assert all(np.allclose(o, offs[0], atol=5e-4) for o in offs), (c, offs)   # <= 0,5 mm
+    m561, m585 = by[561], by[585]
+    assert m561["variant"] == m585["variant"]
