@@ -138,8 +138,9 @@ def frames_member(m, body):
         if n[2] < 0: n = -n                     # n hướng lên
         radial = np.array([mid[0], mid[1], 0.0])
         w = h if np.dot(h, radial) >= 0 else -h  # +w: hướng ra xa trục cột
-        inward = -n                              # "in" = chĩa xuống
-        info = {"rule": "plan", "faces": sorted(common)}
+        up = m.get("type") == "XAD"              # người dùng: thanh XAD cánh hướng LÊN
+        inward = n if up else -n                 # "in" = hướng mặc định (xuống; XAD: lên)
+        info = {"rule": "plan", "faces": sorted(common), "default_up": up}
     out = {}
     for v in VARIANTS:
         e2 = inward if v.startswith("in") else -inward
@@ -338,7 +339,8 @@ def main(out: Path, override_path=None):
                       "variant": r["variant"], "auto_variant": r["variant"], "rule": r["rule"],
                       "frames": {k: [[round(float(x), 6) for x in e] for e in fe]
                                  for k, fe in r.get("frames", {}).items()},
-                      "face": r.get("face") or ",".join(r.get("faces", []))})
+                      "face": r.get("face") or ",".join(r.get("faces", [])),
+                      "default_up": bool(r.get("default_up", False))})
     rules = {}
     for s in scene:
         rules[s["rule"]] = rules.get(s["rule"], 0) + 1

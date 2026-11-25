@@ -12,6 +12,18 @@ from pathlib import Path
 STEEL_DENSITY = 7850.0  # kg/m3
 
 
+BOLT_ORDER = ["M16", "M20", "M24"]
+
+
+def pick_bolt(bolts: dict) -> dict | None:
+    """Ưu tiên số lượng ít nhất; bằng số lượng thì lấy đường kính nhỏ hơn (người dùng chốt)."""
+    opts = [(n, BOLT_ORDER.index(k), k) for k, n in bolts.items() if n is not None]
+    if not opts:
+        return None
+    n, _, k = min(opts)
+    return {"size": k, "d_mm": int(k[1:]), "count": n}
+
+
 def merge(members: list[dict], groups: list[dict]) -> tuple[list[dict], dict]:
     grp_of: dict[int, dict] = {}
     dup = []
@@ -29,7 +41,7 @@ def merge(members: list[dict], groups: list[dict]) -> tuple[list[dict], dict]:
         mass = g["A_cm2"] * 1e-4 * m["length"] * STEEL_DENSITY
         out.append({**{k: m[k] for k in ("id", "p1", "p2", "length", "node1", "node2")},
                     "group": g["group"], "section": g["section"], "type": g["type"],
-                    "A_cm2": g["A_cm2"], "bolts": g["bolts"], "mass_kg": round(mass, 3)})
+                    "A_cm2": g["A_cm2"], "bolts": g["bolts"], "bolt": pick_bolt(g["bolts"]), "mass_kg": round(mass, 3)})
     dxf_ids = {m["id"] for m in members}
     pdf_only = sorted(set(grp_of) - dxf_ids)
     by_sec: dict[str, dict] = {}

@@ -69,7 +69,10 @@ def test_frames(data):
         else:
             e1, e2 = r["frames"]["in+"]
             assert abs(e1[2]) < 1e-6                                 # cánh liên kết nằm ngang
-            assert e2[2] < 0                                         # cánh còn lại chĩa xuống
+            if m["type"] == "XAD":
+                assert e2[2] > 0                                     # XAD: cánh hướng lên
+            else:
+                assert e2[2] < 0                                     # cánh còn lại chĩa xuống
 
 
 def test_rule_counts(data):

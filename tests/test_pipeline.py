@@ -87,3 +87,9 @@ def test_merge(dxf, pdf):
     by_id = {m["id"]: m for m in dxf["members"]}
     indep = sum(g["A_cm2"] * 1e-4 * by_id[i]["length"] * 7850 for g in groups for i in g["members"])
     assert abs(indep - rep["total_mass_kg"]) < 0.5
+
+
+def test_pick_bolt():
+    assert MG.pick_bolt({"M16": 21, "M20": 14, "M24": 10}) == {"size": "M24", "d_mm": 24, "count": 10}
+    assert MG.pick_bolt({"M16": 4, "M20": 2, "M24": 2})["size"] == "M20"       # bằng nhau -> nhỏ hơn
+    assert MG.pick_bolt({"M16": 1, "M20": None, "M24": None})["size"] == "M16"

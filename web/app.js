@@ -190,13 +190,18 @@ function ensureLabels() {
 // ---------------------------------------------------------------- info panel
 function fmt(x, d = 2) { return Number(x).toLocaleString('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d }); }
 function massOf(m) { return m.A_cm2 * 1e-4 * m.length * DENSITY; }
-function boltText(b) {
-  const opts = Object.entries(b).filter(([, n]) => n != null);
-  if (!opts.length) return '—';
-  const min = Math.min(...opts.map(([, n]) => n));
-  const best = opts.filter(([, n]) => n === min).map(([k]) => k);  // ưu tiên số lượng ít
-  const head = best.length === 1 ? `${min} × ${best[0]}` : `${min} × ${best.join(' hoặc ')} <b>(bằng số lượng, chưa chọn)</b>`;
-  return head + (opts.length > 1 ? ` <span class="muted">(${opts.map(([k, n]) => `${k}:${n}`).join(', ')})</span>` : '');
+function boltText(m) {
+  const opts = Object.entries(m.bolts).filter(([, n]) => n != null);
+  if (!m.bolt) return '—';
+  // Chọn sẵn ở Python: ít con nhất, bằng nhau lấy đường kính nhỏ hơn.
+  return `${m.bolt.count} × ${m.bolt.size}` +
+    (opts.length > 1 ? ` <span class="muted">(${opts.map(([k, n]) => `${k}:${n}`).join(', ')})</span>` : '');
+}
+
+function varText(m, v) {
+  let t = VAR_TEXT[m.rule][v];
+  if (m.default_up) t = t.replace('chĩa xuống', '§').replace('chĩa lên', 'chĩa xuống').replace('§', 'chĩa lên');
+  return t;
 }
 
 function showInfo(m) {
@@ -207,18 +212,18 @@ function showInfo(m) {
   const rows = [
     ['Nhóm', m.group], ['Tiết diện', `${m.section} (JIS G3192 ${s.b}×${s.b}×${s.t})`], ['Type', m.type],
     ['Chiều dài', fmt(m.length, 3) + ' m'], ['A', fmt(m.A_cm2) + ' cm²'], ['Khối lượng', fmt(massOf(m), 1) + ' kg'],
-    ['Bu lông', boltText(m.bolts)], ['Nút', `${m.node1 ?? '?'} → ${m.node2 ?? '?'}`],
+    ['Bu lông', boltText(m)], ['Nút', `${m.node1 ?? '?'} → ${m.node2 ?? '?'}`],
     ['Quy tắc', m.rule === 'leg' ? 'Thanh cánh (lưng ra ngoài góc)' :
       m.rule === 'face' ? `Trên mặt cột ${m.face}` : 'Vách ngang / xà'],
-    ['Hướng cánh', m.rule === 'leg' ? '—' : `${m.variant} · ${VAR_TEXT[m.rule][m.variant]}` +
-      (m.variant !== m.auto_variant ? ' <b>(đã sửa)</b>' : '')],
+    ['Hướng cánh', m.rule === 'leg' ? '—' : `${m.variant} · ${varText(m, m.variant)}` +
+      (m.default_up ? ' (XAD: mặc định hướng lên)' : '') + (m.variant !== m.auto_variant ? ' <b>(đã sửa)</b>' : '')],
   ];
   $('iTable').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
   const sel = $('iVariant');
   sel.disabled = m.rule === 'leg';
   $('applyGroup').disabled = $('resetVar').disabled = m.rule === 'leg';
   sel.innerHTML = m.rule === 'leg' ? '<option>—</option>' :
-    VARIANTS.map((v) => `<option value="${v}" ${v === m.variant ? 'selected' : ''}>${v} · ${VAR_TEXT[m.rule][v]}</option>`).join('');
+    VARIANTS.map((v) => `<option value="${v}" ${v === m.variant ? 'selected' : ''}>${v} · ${varText(m, v)}</option>`).join('');
   drawSection(m);
 }
 
