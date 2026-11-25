@@ -256,6 +256,7 @@ def main(dxf, outdir):
     for pl in plates2d:                       # bản mã áp mặt ngoài cánh thanh cánh (A-A) nếu nằm trên thanh cánh
         on_leg_ = any(dist_line(n, L_["w1"], L_["w2"]) < 3.0 for n in pl["nodes"] for L_ in legs)
         pl["delta0"] = gl if on_leg_ else None
+    pt_k = lambda m, k: m["c1"] if k == 0 else m["c2"]
     # lan truyền độ sâu
     for _ in range(20):
         changed = False
@@ -267,6 +268,8 @@ def main(dxf, outdir):
                 pl = m["plate"][k]
                 if pl is not None and pl["delta0"] is not None:
                     lo, hi = pl["delta0"], pl["delta0"] + pl["t"]
+                elif kind == "leg" and (pt_k(m, k)[1] - min(Lg["a"][1], Lg["b"][1])) * SC < 560:
+                    lo, hi = gl, gl + 12                     # chân cột: thanh bắt vào sườn d12 (ngoài cánh thanh cánh)
                 elif kind == "leg":
                     lo, hi = gl - tl, gl
                 elif kind == "brace" and h is not None and any(v is not None for v in h["delta"]):
@@ -300,12 +303,54 @@ def main(dxf, outdir):
         if pl["delta0"] is None:
             pl["delta0"] = gl
 
+    # --- vát cánh theo ghi chú bản vẽ (mặt đứng: 40x60 đầu dưới thanh xiên chính bắt sườn chân cột;
+    #     45x45 đầu thanh ngang L80x6 tại bản mã giữa). Vát trên cánh liên kết (thấy trên mặt đứng).
+    base_y0 = min(Lg["a"][1], Lg["b"][1])
+    for m in keep:
+        for k in (0, 1):
+            p_ = pt_k(m, k)
+            kind_, _h = m["host"][k]
+            near_leg = any(dist_line(p_, L_["w1"], L_["w2"]) < 12 for L_ in legs)
+            if near_leg and (p_[1] - base_y0) * SC < 560:
+                m.setdefault("cuts", {})[k] = {"flange": "conn", "a": 40, "b": 60, "note": "vát cánh 40x60mm"}
+            if m["plate"][k] is not None and m["section"] == "L80X6" and (m["ang"] % 180 < 3 or m["ang"] % 180 > 177):
+                m.setdefault("cuts", {})[k] = {"flange": "conn", "a": 45, "b": 45, "note": "vát cánh 45x45mm"}
+    # mặt cắt: vát cánh 30x30 (1-1, 3-3, 4-4) và 45x45 (2-2) ở đầu thanh ngang mặt cột tại thanh cánh (cánh nằm ngang)
+    level_cut = {"1-1": 30, "2-2": 45, "3-3": 30, "4-4": 30}
+    for pname, (ymark, _box) in PLANS.items():
+        for m in keep:
+            ang = m["ang"] % 180
+            if (ang < 3 or ang > 177) and abs(m["c1"][1] - ymark) < 12:
+                for k in (0, 1):
+                    if m["host"][k][0] == "leg":
+                        m.setdefault("cuts", {})[k] = {"flange": "out", "a": level_cut[pname], "b": level_cut[pname],
+                                                      "note": f"vát cánh {level_cut[pname]}x{level_cut[pname]}mm (mặt cắt {pname})"}
+
     # --- bu lông vẽ (khối 1/2/3): độ sâu = mặt tiếp xúc của thanh dưới nó
     bolts2d = []
+    # ký hiệu bu lông "S.F_D": S con, M F, dài D (mm)
+    blabs = []
+    for t_ in msp.query("TEXT"):
+        mt = re.fullmatch(r"(\d+)\.(\d+)_(\d+)", t_.dxf.text.strip())
+        if mt and inb(t_.dxf.insert):
+            blabs.append((int(mt.group(1)), int(mt.group(2)), int(mt.group(3)), (t_.dxf.insert[0], t_.dxf.insert[1])))
+
+    def bolt_len(q, dmm, grip):
+        """Chiều dài theo ký hiệu bản vẽ gần nhất cùng đường kính: chọn L ngắn nhất >= kẹp + đai ốc + vòng đệm."""
+        need = grip + 0.8 * dmm + 4 + 3
+        cand = sorted({L for (n_, d_, L, pp) in blabs if d_ == dmm and math.dist(pp, q) < 40})
+        if not cand:
+            return None, need
+        ok = [L for L in cand if L >= need]
+        return (ok[0] if ok else cand[-1]), need
+
+    base_y = min(Lg["a"][1], Lg["b"][1])
     for e in msp.query("INSERT"):
         if e.dxf.name not in ("1", "2", "3") or not inb(e.dxf.insert):
             continue
         q = (e.dxf.insert[0], e.dxf.insert[1])
+        if (q[1] - base_y) * SC < 560 and any(dist_line(q, L_["w1"], L_["w2"]) < 12 for L_ in legs):
+            continue                                   # chân cột: lấy đúng theo lỗ trên chi tiết sườn
         best = None
         for m in keep:
             d_, t = dist_seg(q, m["c1"], m["c2"])
@@ -314,19 +359,30 @@ def main(dxf, outdir):
         pl = next((p for p in plates2d if point_in_poly(q, p["pts"])), None)
         on_leg_ = any(dist_line(q, L_["w1"], L_["w2"]) < 3.5 and
                       min(L_["a"][1], L_["b"][1]) <= q[1] <= max(L_["a"][1], L_["b"][1]) for L_ in legs)
+        dmm = {"1": 16, "2": 20, "3": 24}[e.dxf.name]
         if best:
             m, t = best[1], best[2]
             dl = m["delta"][0] * (1 - t) + m["delta"][1] * t
+            k_ = 0 if t < 0.5 else 1
+            kind_, h_ = m["host"][k_]
+            plh = m["plate"][k_]
+            th = plh["t"] if plh else (tl if kind_ == "leg" else (h_["t_mm"] if kind_ == "brace" else m["t_mm"]))
+            sm = 1 if m["out"] else -1
+            lo, hi = sorted((dl - sm * th, dl + sm * m["t_mm"]))
         elif pl:
             dl = pl["delta0"]
+            lo, hi = dl - 7, dl + pl["t"] + 7
         elif on_leg_:
-            dl = gl                                   # bu lông mối nối thanh cánh
+            dl = gl                                   # mối nối thanh cánh: thép góc nối trong HL130x9 + bản nối ngoài d10 (A-A)
+            lo, hi = gl - tl - 9, gl + 10
         else:
             rep.setdefault("bolts_dropped", 0)
             rep["bolts_dropped"] += 1
             rep.setdefault("bolts_dropped_pts", []).append(q)
             continue
-        bolts2d.append({"p": q, "delta": dl, "d": {"1": 16, "2": 20, "3": 24}[e.dxf.name]})
+        L_b, need = bolt_len(q, dmm, hi - lo)
+        bolts2d.append({"p": q, "delta": dl, "d": dmm, "lo": lo, "hi": hi, "L": L_b or math.ceil(need / 10) * 10,
+                        "L_from": "ký hiệu bản vẽ" if L_b else "tính (không thấy ký hiệu)"})
 
     # --- chiếu sang 3D (mặt trước y = -h), xoay 4 mặt
     def to3(p, delta_mm=0.0):
@@ -386,6 +442,7 @@ def main(dxf, outdir):
                 "g": [m["heel_to_center"] or s_["b"] / 2, 0.0], "group": 2, "bolts": {}, "bolt": None,
                 "node1": None, "node2": None, "face_k": k, "x_pair": False, "default_up": False,
                 "side": "NGOAI" if m["out"] else "TRONG",
+                **({f"cut{kk + 1}": v for kk, v in m.get("cuts", {}).items()}),
                 "drawing": {"edges": m["edges"], "width": m["width"], "section_from": m.get("section_from", "nhãn"),
                             "delta_mm": [round(v, 1) for v in m["delta"]]}})
         for pl in plates2d:
@@ -400,8 +457,9 @@ def main(dxf, outdir):
                            "area_m2": round(area, 5), "mass_kg": round(area * pl["t"] / 1000 * 7850, 2),
                            "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0, "reason": "bản vẽ DT-02 (mặt đứng)"})
         for b in bolts2d:
-            p = Rk @ to3(b["p"])[0] + n * b["delta"] / 1000
-            bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": n.round(6).tolist(),
+            p = Rk @ to3(b["p"])[0] + n * b["lo"] / 1000          # mặt tựa đầu bu lông (phía trong)
+            bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": n.round(6).tolist(), "grip_mm": round(b["hi"] - b["lo"], 1),
+                          "L_mm": b["L"], "L_from": b["L_from"],
                           "nut": n.round(6).tolist(), "d_mm": b["d"], "t_mm": 10, "kind": "drawing"})
 
     # --- mặt cắt vách ngang
@@ -485,7 +543,14 @@ def main(dxf, outdir):
             if e.dxf.name in ("1", "2", "3") and inbox(e.dxf.insert):
                 q = loc(e.dxf.insert)
                 if q[0] <= 5 and q[1] <= 5:
-                    plan_bolts.append((q, z, {"1": 16, "2": 20, "3": 24}[e.dxf.name]))
+                    dmm_ = {"1": 16, "2": 20, "3": 24}[e.dxf.name]
+                    labsP = []
+                    for t_ in msp.query("TEXT"):
+                        mt = re.fullmatch(r"(\d+)\.(\d+)_(\d+)", t_.dxf.text.strip())
+                        if mt and inbox(t_.dxf.insert) and int(mt.group(2)) == dmm_:
+                            labsP.append((math.dist(t_.dxf.insert, e.dxf.insert), int(mt.group(3))))
+                    Lp = min(labsP)[1] if labsP else None
+                    plan_bolts.append((q, z, dmm_, Lp))
                     pb += 1
         for e in msp.query('LWPOLYLINE[layer=="Banma"]'):
             pts = [(q_[0], q_[1]) for q_ in e.get_points()]
@@ -535,15 +600,18 @@ def main(dxf, outdir):
         members.append(m)
     rep["plans"] = plan_rep
     seenb = set()
-    for (q, z, dmm) in plan_bolts:
+    for (q, z, dmm, Lp) in plan_bolts:
         for k in range(4):
             p = rot(k) @ np.array([q[0], q[1], z]) / 1000
             key = tuple(np.round(p, 3))
             if key in seenb:
                 continue
             seenb.add(key)
-            bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": [0, 0, 1.0], "nut": [0, 0, -1.0],
-                          "d_mm": dmm, "t_mm": 8, "kind": "plan"})
+            # thanh vách nằm ngang: đầu bu lông phía trên, đai ốc phía dưới; kẹp 2 cánh nằm ngang
+            ph = p + np.array([0, 0, 0.006])
+            bolts.append({"id": 0, "p": ph.round(5).tolist(), "axis": [0, 0, -1.0], "nut": [0, 0, -1.0],
+                          "d_mm": dmm, "grip_mm": 12, "L_mm": Lp or 40,
+                          "L_from": "ký hiệu bản vẽ" if Lp else "tính", "t_mm": 8, "kind": "plan"})
     for (Q, z) in plan_plates:
         for k in range(4):
             P = [rot(k) @ np.array([q[0], q[1], z]) / 1000 for q in Q]
@@ -568,6 +636,10 @@ def main(dxf, outdir):
     #   => góc lưng thanh cánh ở |x| = 3771; mặt bằng bản đế: lưng cách mép ngoài 200, bản 450x450x40,
     #      sườn 1 bắt đầu từ mép bản (3771 + 200 = 3971 khớp); sườn 2 nối tiếp sườn 3 ra ngoài, sau sườn 1.
     HEEL = 3771.0
+    RIB1_H = [(265, 98), (277, 177), (289, 256), (300, 335), (312, 415), (315, 131), (327, 210), (339, 289), (351, 368),
+              (362, 448), (430, 213), (468, 272), (505, 331)]      # lỗ sườn D322 đọc từ DXF (mm)
+    RIB3_H = [(71, 138), (83, 217), (95, 296), (106, 375), (110, 91), (118, 454), (122, 171), (133, 250), (145, 329),
+              (157, 408), (230, 213), (268, 272), (305, 331)]      # lỗ sườn D323
     slope_abs = abs(slope)
     Z0 = 11.0
     T_RIB = 12.0
@@ -602,6 +674,19 @@ def main(dxf, outdir):
                            "a2": tu.round(6).tolist(), "thick_dir": n.round(6).tolist(), "poly": poly2,
                            "area_m2": round(area, 5), "mass_kg": round(area * T_RIB / 1000 * 7850, 2),
                            "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0, "reason": "chân cột: " + label})
+        # bu lông chân cột theo đúng lỗ chi tiết sườn (D322 = sườn 1, D323 = sườn 3): 10 lỗ thanh cánh (12.20_70:
+        # kẹp sườn 12 + cánh 12) và 3 lỗ thanh xiên (3.20_60: kẹp sườn 12 + thanh xiên 7, áp mặt trong sườn)
+        for holes, xf, ndiag in ((RIB1_H, lambda u: -3971.0 + u, 430), (RIB3_H, lambda u: HEEL - u, 230)):
+            for u, v in holes:
+                p0 = np.array([xf(u), -h_base, 0.0]) / 1000 + nf * gl / 1000
+                p0 = p0 - tup * (p0[2] / tup[2]) + tup * v / 1000
+                diag = u >= ndiag
+                lo = gl - 7 if diag else gl - tl
+                p_head = Rk @ (p0 + nf * (lo - gl) / 1000)
+                bolts.append({"id": 0, "p": p_head.round(5).tolist(), "axis": n.round(6).tolist(),
+                              "nut": n.round(6).tolist(), "d_mm": 20, "grip_mm": (gl + T_RIB) - lo,
+                              "L_mm": 60 if diag else 70, "L_from": "ký hiệu bản vẽ " + ("3.20_60" if diag else "12.20_70"),
+                              "t_mm": 12, "kind": "chân cột"})
         # bản đế 450x450x40: lưng thanh cánh tại (200, 200) tính từ góc ngoài; 4 lỗ neo Ø64 tại 100/350
         heel3 = np.array([-HEEL, -HEEL, 0.0]) / 1000
         ex_, ey_ = np.array([1.0, 0, 0]), np.array([0, 1.0, 0])

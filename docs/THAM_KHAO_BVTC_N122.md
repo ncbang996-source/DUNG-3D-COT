@@ -93,3 +93,9 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   (bản vẽ ghi 80). Mặt đứng: mặt trên bản đế = đầu dưới thanh cánh = đáy sườn (cao độ 0). Cạnh xiên sườn 2 (độ dốc
   = độ nghiêng thanh cánh) áp dọc mặt ngoài sườn 1 -> đáy sườn 2 dài 188 (khớp mặt bằng), đỉnh rộng 260 (khớp chi tiết).
 - Bỏ 24 bu lông mặt cắt không nằm trên thanh nào (cách trục > 100 mm).
+- Bu lông: chiều dài theo ký hiệu S.F_D gần nhất cùng đường kính (chọn L ngắn nhất >= kẹp + đai ốc + đệm);
+  thân xuyên qua các lớp thép (kẹp tính theo thanh + thanh chủ/bản mã), đầu bu lông phía trong, đai ốc ra ngoài.
+  Chân cột: 13 lỗ mỗi sườn theo chi tiết D322/D323 (10 lỗ 12.20_70 kẹp sườn + cánh thanh cánh, 3 lỗ 3.20_60 kẹp
+  sườn + thanh xiên chính áp mặt trong sườn).
+- Vát cánh theo ghi chú: 40x60 đầu dưới thanh xiên chính (bắt sườn chân cột); 45x45 thanh ngang L80x6 tại bản mã giữa;
+  30x30 (mặt cắt 1-1, 3-3, 4-4) và 45x45 (2-2) ở cánh nằm ngang của thanh ngang mặt cột tại thanh cánh.

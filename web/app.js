@@ -101,7 +101,41 @@ function clipBelow(poly, h) {
   return out;
 }
 
+// Thanh có vát cánh (cut1/cut2 = {flange: 'conn'|'out', a: ngang cánh, b: dọc thanh} mm): dựng 2 cánh thành 2
+// khối phẳng, cắt góc mép cánh ở đầu thanh tương ứng.
+function buildCutGeometry(m) {
+  const s = sections[m.section];
+  const [g1, g2] = m.g;
+  const [e1, e2] = frameOf(m, m.variant).map((a) => new THREE.Vector3(...a));
+  const off = new THREE.Vector3(...((m.offs && m.offs[m.variant]) || [0, 0, 0]));
+  const p1 = new THREE.Vector3(...(m.p1d || m.p1)).add(off).add(new THREE.Vector3(...(m.poff1 || [0, 0, 0])));
+  const p2 = new THREE.Vector3(...(m.p2d || m.p2)).add(off).add(new THREE.Vector3(...(m.poff2 || [0, 0, 0])));
+  const L = p1.distanceTo(p2) * 1000;
+  const P = (x, a, b) => p1.clone().lerp(p2, x / L).addScaledVector(e1, (a - g1) / 1000).addScaledVector(e2, (b - g2) / 1000);
+  const pos = [];
+  const push = (...vs) => vs.forEach((v) => pos.push(v.x, v.y, v.z));
+  for (const fl of ['conn', 'out']) {
+    // đa giác trong mặt (x dọc thanh, w ngang cánh từ lưng tới mép)
+    const W = s.b;
+    let poly = [[0, 0], [L, 0], [L, W], [0, W]];
+    const c1 = m.cut1 && m.cut1.flange === fl ? m.cut1 : null, c2 = m.cut2 && m.cut2.flange === fl ? m.cut2 : null;
+    poly = [[0, 0], [L, 0]];
+    if (c2) poly.push([L, W - c2.a], [L - c2.b, W]); else poly.push([L, W]);
+    if (c1) poly.push([c1.b, W], [0, W - c1.a]); else poly.push([0, W]);
+    const map = fl === 'conn' ? (x, w, t) => P(x, w, t) : (x, w, t) => P(x, t, w);
+    const A0 = poly.map(([x, w]) => map(x, w, 0)), A1 = poly.map(([x, w]) => map(x, w, s.t));
+    const n = poly.length;
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; push(A0[i], A0[j], A1[j], A0[i], A1[j], A1[i]); }
+    for (let i = 1; i < n - 1; i++) { push(A0[0], A0[i + 1], A0[i]); push(A1[0], A1[i], A1[i + 1]); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
 function buildGeometry(m) {
+  if (m.cut1 || m.cut2) return buildCutGeometry(m);
   const s = sections[m.section];
   const chamfer = !!(m.chamfer1 || m.chamfer2);
   // thanh vát: phần cánh không khoan lỗ cao hơn h0 = t + r1 dựng riêng (hình thang), profile cắt tại h0
@@ -239,10 +273,17 @@ function buildBolts() {
   const Y = new THREE.Vector3(0, 1, 0), M = new THREE.Matrix4(), q = new THREE.Quaternion();
   bolts.forEach((b, i) => {
     const d = b.d_mm / 1000, nd = new THREE.Vector3(...(b.nut || b.axis));
-    const grip = b.t_mm / 1000 + (b.centered ? 0 : b.t_mm / 1000);   // chiều dày kẹp ước lượng
-    // tâm kẹp: bu lông thanh nằm trên mặt lưng, kẹp về hai phía; bu lông giao chữ X ở giữa khe hở
     const c = new THREE.Vector3(...b.p);
     q.setFromUnitVectors(Y, nd);
+    if (b.grip_mm != null && b.L_mm != null) {
+      // p = mặt tựa đầu bu lông; thân dài L theo ký hiệu bản vẽ xuyên qua các lớp thép (kẹp = grip)
+      const L = b.L_mm / 1000, grip = b.grip_mm / 1000;
+      M.compose(c.clone().addScaledVector(nd, L / 2), q, new THREE.Vector3(d, L, d)); shafts.setMatrixAt(i, M);
+      M.compose(c.clone().addScaledVector(nd, -0.33 * d), q, new THREE.Vector3(1.7 * d, 0.65 * d, 1.7 * d)); heads.setMatrixAt(i, M);
+      M.compose(c.clone().addScaledVector(nd, grip + 0.4 * d), q, new THREE.Vector3(1.8 * d, 0.8 * d, 1.8 * d)); nuts.setMatrixAt(i, M);
+      return;
+    }
+    const grip = b.t_mm / 1000 + (b.centered ? 0 : b.t_mm / 1000);   // chiều dày kẹp ước lượng (mô hình cũ)
     const len = grip + 1.6 * d;
     M.compose(c.clone().addScaledVector(nd, 0.2 * d), q, new THREE.Vector3(d, len, d)); shafts.setMatrixAt(i, M);
     M.compose(c.clone().addScaledVector(nd, -(grip / 2 + 0.35 * d)), q, new THREE.Vector3(1.7 * d, 0.65 * d, 1.7 * d)); heads.setMatrixAt(i, M);
@@ -305,6 +346,8 @@ function showInfo(m) {
       m.rule === 'face' ? `Trên mặt cột ${m.face}` + (m.x_pair ? ' · cặp chữ X' : '') +
         (m.variant.startsWith('out') ? ' · lưng áp mặt NGOÀI cánh thanh cánh' : ' · lưng áp mặt TRONG cánh thanh cánh') :
       'Vách ngang / xà'],
+    ...((m.cut1 || m.cut2) ? [['Vát cánh', [m.cut1, m.cut2].filter(Boolean).map((c) => c.note || `${c.a}x${c.b}`).join('; ')]] : []),
+    ...(m.drawing && m.drawing.delta_mm ? [['Độ sâu 2 đầu (mm)', m.drawing.delta_mm.join(' / ')]] : []),
     ...(m.p1d ? [['Điểm bắt đã dời', `${m.p1d.join(', ')} → ${m.p2d.join(', ')}`]] : []),
     ['Hướng cánh', m.rule === 'leg' ? '—' : `${m.variant} · ${varText(m, m.variant)}` +
       (m.default_up ? ' (XAD: mặc định hướng lên)' : '') + (m.variant !== m.auto_variant ? ' <b>(đã sửa)</b>' : '')],
