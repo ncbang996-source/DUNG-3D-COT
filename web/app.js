@@ -279,6 +279,7 @@ function boltText(m) {
 }
 
 function varText(m, v) {
+  if (!VAR_TEXT[m.rule] || !(v in VAR_TEXT[m.rule])) return m.side ? `Theo bản vẽ: thanh ${m.side === 'NGOAI' ? 'NGOÀI' : 'TRONG'}` : v;
   let t = VAR_TEXT[m.rule][v];
   if (m.default_up) t = t.replace('chĩa xuống', '§').replace('chĩa lên', 'chĩa xuống').replace('§', 'chĩa lên');
   return t;
@@ -307,7 +308,8 @@ function showInfo(m) {
   sel.disabled = m.rule === 'leg';
   $('applyGroup').disabled = $('resetVar').disabled = m.rule === 'leg';
   sel.innerHTML = m.rule === 'leg' ? '<option>—</option>' :
-    VARIANTS.map((v) => `<option value="${v}" ${v === m.variant ? 'selected' : ''}>${v} · ${varText(m, v)}</option>`).join('');
+    Object.keys(m.frames || {}).filter((v) => !VARIANTS.includes(v)).map((v) => `<option value="${v}" selected>${varText(m, v)}</option>`).join('') +
+    VARIANTS.filter((v) => m.frames && m.frames[v]).map((v) => `<option value="${v}" ${v === m.variant ? 'selected' : ''}>${v} · ${varText(m, v)}</option>`).join('');
   drawSection(m);
 }
 
@@ -462,6 +464,7 @@ async function load() {
   DATA = window.__SCENE__ || await (await fetch('data/scene.json')).json();
   members = DATA.members;
   sections = DATA.sections;
+  if (DATA.title) { document.querySelector('#panel h1').textContent = DATA.title; document.title = DATA.title; }
   byId = new Map(members.map((m) => [m.id, m]));
   const secNames = Object.keys(sections).sort((a, b) => sections[a].b - sections[b].b || a.localeCompare(b));
   secNames.forEach((s, i) => { sectionColors[s] = PALETTE[i % PALETTE.length]; });

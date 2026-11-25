@@ -65,3 +65,27 @@ Phía có nét chiều dày là phía góc lưng.
 | Thanh xiên chính chữ A L100x7 | TRONG | DƯỚI | 2 |
 | Thanh phụ L50x4 | NGOÀI | dưới | 2 |
 | Thanh phụ L65x5 | NGOÀI | trên | 1 |
+
+## 4. Dựng 3D N122 từ bản vẽ (tools/bvtc/build_n122.py) — trạng thái
+
+- Đã dựng: thân DT-02, DT-01 (4 mặt giống nhau, xoay 90°), ngọn DN-02, DN-01 (mặt có đầu xà = trước/sau,
+  mặt kia = 2 bên), vách ngang từ 11 mặt cắt (tam giác giằng góc / 1/4 vách được xoay đủ 4 góc).
+  324 thanh, ~8,1 tấn (chưa có xà, bản mã, bu lông). Xem `dist/N122_tu_BVTC.html`.
+- Cao độ: DT theo bề rộng thân (thanh cánh liền, độ dốc 0,1483 cả 2 đoạn); DN theo thanh ngang nối đoạn.
+  Kiểm tra: DN-02 cao 6900 mm khớp sơ đồ.
+- Đường tim thanh cánh: HL150x12 và HL130x9 đều cách lưng 80 mm (chọn đường tâm đi qua giao điểm các
+  thanh xiên). Nửa bề rộng ngọn 945 mm; chỗ gãy dốc thân cho 935 mm (lệch 10 mm, sai số bản vẽ).
+- Chưa làm / còn sai: xà X1, X2; mặt cắt DT-02 2-2 đọc chưa đủ; vách đỉnh còn lẫn thanh xà; độ sâu thanh
+  (lệch khỏi mặt phẳng mặt cột) chưa đọc từ bản vẽ, đang theo quy tắc ép sát cánh thanh cánh.
+
+## 5. Quy tắc hướng cánh rút ra (tools/bvtc/derive_rules.py, 4 đoạn, nhìn từ ngoài)
+
+| Vai trò thanh trên mặt cột | Bản vẽ | Số thanh |
+|---|---|---|
+| Cặp chữ X, thanh đi lên về bên PHẢI | TRONG, lưng trên | 26/26 |
+| Cặp chữ X, thanh đi lên về bên TRÁI | NGOÀI, lưng trên | 26/26 |
+| Thanh ngang | TRONG 26/26; lưng trên 22, lưng dưới 4 (L90x7 mặt bên ngọn, cao độ có xà) | 26 |
+| Cặp chữ V ngắn ở ngọn, cặp L65x5 ở chân | lên trái NGOÀI, lên phải TRONG (giống chữ X) | 6 |
+| Cặp L90x7 chữ V ngược, cặp L60x5 | cả hai TRONG, lưng trên | 4 |
+| Thanh xiên chính dài nhất đoạn chân (L90x7 ~6,7 m) | TRONG, lưng DƯỚI | 2 |
+| Thanh phụ L60x5 gần nút K | NGOÀI, lưng dưới | 2 |
