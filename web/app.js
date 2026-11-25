@@ -160,7 +160,11 @@ const selMat = new THREE.MeshStandardMaterial({ color: 0xffd400, emissive: 0x664
 let sectionColors = {};
 function colorOf(m) {
   if (state.colorBy === 'type') return TYPE_COL[m.type] || '#888';
-  if (state.colorBy === 'variant') return VAR_COL[m.rule === 'leg' ? 'leg' : m.variant];
+  if (state.colorBy === 'variant') {
+    if (m.rule === 'leg') return VAR_COL.leg;
+    if (VAR_COL[m.variant]) return VAR_COL[m.variant];
+    return { NGOAI: '#ff9f1c', TRONG: '#4aa3ff', LEN: '#e0393e', XUONG: '#139a43' }[m.side] || '#888';
+  }
   return sectionColors[m.section];
 }
 
@@ -186,7 +190,9 @@ function refreshMaterials() {
 function renderLegend() {
   let entries;
   if (state.colorBy === 'type') entries = Object.entries(TYPE_COL);
-  else if (state.colorBy === 'variant') entries = [['Thanh cánh', VAR_COL.leg], ...VARIANTS.map((v) => [v, VAR_COL[v]])];
+  else if (state.colorBy === 'variant') entries = members.some((m) => m.variant === 'bv')
+    ? [['Thanh cánh', VAR_COL.leg], ['NGOÀI (mặt cột)', '#ff9f1c'], ['TRONG (mặt cột)', '#4aa3ff'], ['Vách: cánh lên', '#e0393e'], ['Vách: cánh xuống', '#139a43']]
+    : [['Thanh cánh', VAR_COL.leg], ...VARIANTS.map((v) => [v, VAR_COL[v]])];
   else entries = Object.entries(sectionColors);
   $('legend').innerHTML = entries.map(([k, c]) => `<div><span style="background:${c}"></span>${k}</div>`).join('');
 }

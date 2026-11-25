@@ -85,7 +85,13 @@ def members(doc, msp, box, labels=None):
             continue
         ref = max(cen, key=lambda l: l["len"])
         items = [(_rel(ref, S[i]), S[i]["k"]) for i in g]
-        ed = sorted((round(o * SC, 1), k) for (o, _), k in items if k != "A")
+        _, sr = _rel(ref, ref)
+        Lr = sr[1] - sr[0]
+        # nét mép/nét chiều dày phải chạy dọc phần đáng kể của thanh (loại nét ngắn của thanh khác song song)
+        ed = sorted((round(o * SC, 1), k) for (o, sp), k in items
+                    if k != "A" and min(sp[1], sr[1]) - max(sp[0], sr[0]) >= 0.3 * Lr)
+        if len(ed) < 2:
+            ed = sorted((round(o * SC, 1), k) for (o, _), k in items if k != "A")
         if len(ed) < 2:
             continue
         lo, hi = ed[0][0], ed[-1][0]

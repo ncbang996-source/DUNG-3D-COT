@@ -66,26 +66,19 @@ Phía có nét chiều dày là phía góc lưng.
 | Thanh phụ L50x4 | NGOÀI | dưới | 2 |
 | Thanh phụ L65x5 | NGOÀI | trên | 1 |
 
-## 4. Dựng 3D N122 từ bản vẽ (tools/bvtc/build_n122.py) — trạng thái
+## 4. Dựng lại đoạn thân DT-02 (tools/bvtc/dt02.py) — bản để góp ý
 
-- Đã dựng: thân DT-02, DT-01 (4 mặt giống nhau, xoay 90°), ngọn DN-02, DN-01 (mặt có đầu xà = trước/sau,
-  mặt kia = 2 bên), vách ngang từ 11 mặt cắt (tam giác giằng góc / 1/4 vách được xoay đủ 4 góc).
-  324 thanh, ~8,1 tấn (chưa có xà, bản mã, bu lông). Xem `dist/N122_tu_BVTC.html`.
-- Cao độ: DT theo bề rộng thân (thanh cánh liền, độ dốc 0,1483 cả 2 đoạn); DN theo thanh ngang nối đoạn.
-  Kiểm tra: DN-02 cao 6900 mm khớp sơ đồ.
-- Đường tim thanh cánh: HL150x12 và HL130x9 đều cách lưng 80 mm (chọn đường tâm đi qua giao điểm các
-  thanh xiên). Nửa bề rộng ngọn 945 mm; chỗ gãy dốc thân cho 935 mm (lệch 10 mm, sai số bản vẽ).
-- Chưa làm / còn sai: xà X1, X2; mặt cắt DT-02 2-2 đọc chưa đủ; vách đỉnh còn lẫn thanh xà; độ sâu thanh
-  (lệch khỏi mặt phẳng mặt cột) chưa đọc từ bản vẽ, đang theo quy tắc ép sát cánh thanh cánh.
+Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, kiểm từng phần bằng ảnh chồng nét CAD
+(`docs/kiemtra_DT-02_matdung.png`, `docs/kiemtra_DT-02_matcat.png`). Xem 3D: `dist/N122_DT-02.html`.
 
-## 5. Quy tắc hướng cánh rút ra (tools/bvtc/derive_rules.py, 4 đoạn, nhìn từ ngoài)
-
-| Vai trò thanh trên mặt cột | Bản vẽ | Số thanh |
-|---|---|---|
-| Cặp chữ X, thanh đi lên về bên PHẢI | TRONG, lưng trên | 26/26 |
-| Cặp chữ X, thanh đi lên về bên TRÁI | NGOÀI, lưng trên | 26/26 |
-| Thanh ngang | TRONG 26/26; lưng trên 22, lưng dưới 4 (L90x7 mặt bên ngọn, cao độ có xà) | 26 |
-| Cặp chữ V ngắn ở ngọn, cặp L65x5 ở chân | lên trái NGOÀI, lên phải TRONG (giống chữ X) | 6 |
-| Cặp L90x7 chữ V ngược, cặp L60x5 | cả hai TRONG, lưng trên | 4 |
-| Thanh xiên chính dài nhất đoạn chân (L90x7 ~6,7 m) | TRONG, lưng DƯỚI | 2 |
-| Thanh phụ L60x5 gần nút K | NGOÀI, lưng dưới | 2 |
+- Mặt đứng: 19/21 thanh (2 thanh toàn nét khuất là thanh phía sau, bỏ), 4 mặt xoay 90°.
+  Thanh cánh HL150x12 liền, đường tim cách lưng 80 mm; cao độ 0 = đầu dưới thanh cánh.
+- Ở DT-02 các thanh KHÔNG đồng quy một điểm trên thanh cánh: bắt so le (cách 100 mm), phần lớn bắt
+  thẳng vào cánh thanh cánh 1 bu lông (1.16_50, 3.16_50), không bản mã.
+- Bản mã theo bản vẽ: nút giữa mặt (8.20_60 + 4.20_60) và mối nối đỉnh đoạn (d10, ngoài cánh thanh cánh,
+  hình cắt A-A). Bu lông lấy theo khối M16/M20/M24 trên mặt đứng.
+- Độ sâu mỗi đầu thanh theo thanh chủ: TRONG áp mặt trong, NGOÀI áp mặt ngoài; ở nút có bản mã thì áp bản mã.
+- Vách ngang 1-1, 3-3, 4-4: tam giác giằng góc; 2-2: 1/4 vách (chéo góc, hình thoi nối trung điểm mặt,
+  vòng vuông L70x6) — cắt theo 1/4 rồi xoay 4 góc.
+- Còn thiếu: bản mã/bu lông của vách ngang (mặt cắt chưa đọc phần này); 2 thanh L60x5 gần chân không tìm
+  được thanh chủ (độ sâu tạm); 33 bu lông vẽ không nằm trên thanh/bản mã nào bị bỏ.
