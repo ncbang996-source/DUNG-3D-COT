@@ -1,0 +1,43 @@
+:root {
+  --bg: #f4f5f7; --panel: #ffffff; --fg: #1d2430; --muted: #6b7380; --line: #d9dde3;
+  --accent: #1f6feb; --view: #eef1f5;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14171c; --panel: #1c2027; --fg: #e6e9ee; --muted: #9aa3ae; --line: #30363f;
+          --accent: #4c94ff; --view: #101317; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { display: flex; }
+#panel { width: 310px; flex: none; height: 100%; overflow: auto; padding: 12px 14px;
+  background: var(--panel); border-right: 1px solid var(--line); }
+#view { flex: 1; position: relative; min-width: 0; background: var(--view); }
+h1 { font-size: 17px; margin: 0 0 4px; }
+h2 { font-size: 13px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+section { border-top: 1px solid var(--line); padding: 10px 0; }
+label { display: block; margin: 3px 0; }
+select { margin-left: 4px; max-width: 170px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+button { font: inherit; padding: 4px 9px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); color: var(--fg); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+.muted { color: var(--muted); }
+#legend { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
+#legend span { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+#iTable { border-collapse: collapse; width: 100%; }
+#iTable td { padding: 2px 4px; border-bottom: 1px solid var(--line); }
+#iTable td:first-child { color: var(--muted); width: 45%; }
+#secSvg { width: 100%; max-width: 220px; display: block; margin: 8px auto; background: var(--bg); border-radius: 6px; }
+.lbl { font: 11px system-ui, sans-serif; padding: 0 3px; border-radius: 3px; pointer-events: none; white-space: nowrap; }
+.lbl.node { color: #0a7d32; background: rgba(255,255,255,.75); }
+.lbl.mem { color: #a01010; background: rgba(255,255,255,.75); }
+dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); max-width: 92vw; }
+dialog table { border-collapse: collapse; margin: 8px 0; }
+dialog td, dialog th { padding: 3px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+dialog td:first-child, dialog th:first-child { text-align: left; }
+@media (max-width: 700px) {
+  body { flex-direction: column-reverse; }
+  #panel { width: 100%; height: 45%; border-right: 0; border-top: 1px solid var(--line); }
+  #view { height: 55%; }
+}

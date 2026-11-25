@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cột thép NC111-32</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.js",
+  "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+<aside id="panel">
+  <h1>Cột NC111-32</h1>
+  <div id="summary" class="muted">Đang tải…</div>
+
+  <section>
+    <h2>Hiển thị</h2>
+    <label>Tô màu theo
+      <select id="colorBy">
+        <option value="section">Tiết diện</option>
+        <option value="type">Type</option>
+        <option value="variant">Hướng cánh</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="showSteel" checked> Thép góc</label>
+    <label><input type="checkbox" id="showAxis"> Đường tim (DXF)</label>
+    <label><input type="checkbox" id="showNodes"> Số nút</label>
+    <label><input type="checkbox" id="showMemNo"> Số thanh</label>
+    <div id="legend"></div>
+  </section>
+
+  <section>
+    <h2>Lọc</h2>
+    <label>Tiết diện <select id="fSection"><option value="">Tất cả</option></select></label>
+    <label>Type <select id="fType"><option value="">Tất cả</option></select></label>
+    <label>Nhóm <select id="fGroup"><option value="">Tất cả</option></select></label>
+    <label><input type="checkbox" id="fGhost" checked> Hiện mờ thanh bị lọc</label>
+  </section>
+
+  <section id="info" hidden>
+    <h2>Thanh <span id="iId"></span></h2>
+    <table id="iTable"></table>
+    <svg id="secSvg" viewBox="0 0 220 220" aria-label="Mặt cắt L"></svg>
+    <div class="row">
+      <label>Hướng cánh <select id="iVariant"></select></label>
+    </div>
+    <div class="row">
+      <button id="applyGroup">Áp cho cả nhóm</button>
+      <button id="resetVar">Về tự động</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Xuất</h2>
+    <div class="row">
+      <button id="btnStats">Bảng khối lượng</button>
+      <button id="btnStatsCsv">Tải CSV khối lượng</button>
+    </div>
+    <div class="row">
+      <button id="btnOverride">Tải orientation_override.csv</button>
+    </div>
+    <div id="ovCount" class="muted"></div>
+  </section>
+</aside>
+
+<main id="view"></main>
+
+<dialog id="statsDlg">
+  <h2>Khối lượng theo tiết diện (A × L × 7850 kg/m³)</h2>
+  <div id="statsBody"></div>
+  <form method="dialog"><button>Đóng</button></form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
