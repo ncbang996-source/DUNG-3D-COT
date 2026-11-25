@@ -177,6 +177,41 @@ def leg_pieces(ms, leg):
     return out
 
 
+def guess_sections(ms, labs):
+    """Thanh không gán được nhãn: lấy nhãn trong vùng có b gần bề rộng đo nhất (đánh dấu 'đoán')."""
+    import collections
+    import re as _re
+    freq = collections.Counter(t for t, _ in labs)
+    for m in ms:
+        if m.get("section") or not freq:
+            continue
+        best = min(freq, key=lambda t: (abs(int(_re.match(r"H?L(\d+)", t).group(1)) - m["width"]), -freq[t]))
+        if abs(int(_re.match(r"H?L(\d+)", best).group(1)) - m["width"]) <= 15:
+            m["section"], m["section_from"] = best, "doan"
+
+
+def leg_extent(d, leg):
+    """Chiều dài thật của thanh cánh: mọi nét thẳng hàng, nằm trong bề rộng thanh cánh quanh đường tim."""
+    (x1, y1), (x2, y2) = leg["c1"], leg["c2"]
+    L = math.dist(leg["c1"], leg["c2"])
+    ux, uy = (x2 - x1) / L, (y2 - y1) / L
+    lim = 170 / SC
+    ss = []
+    for sg in d["segs"]:
+        if abs(((math.degrees(sg["ang"]) - leg["ang"]) + 90) % 180 - 90) > 1.0:
+            continue
+        for p in (sg["a"], sg["b"]):
+            dd = abs((x2 - x1) * (y1 - p[1]) - (x1 - p[0]) * (y2 - y1)) / L
+            if dd > lim:
+                break
+        else:
+            for p in (sg["a"], sg["b"]):
+                ss.append((p[0] - x1) * ux + (p[1] - y1) * uy)
+    if not ss:
+        return leg["p1"], leg["p2"]
+    return (x1 + ux * min(ss), y1 + uy * min(ss)), (x1 + ux * max(ss), y1 + uy * max(ss))
+
+
 def line_x_at(m, y):
     (x1, y1), (x2, y2) = m["c1"], m["c2"]
     return x1 + (y - y1) * (x2 - x1) / (y2 - y1)
@@ -209,8 +244,10 @@ def main(dxf, out):
         L, Rr = legs_of(ms)
         y_mid = (L["c1"][1] + L["c2"][1]) / 2
         xc = (line_x_at(L, y_mid) + line_x_at(Rr, y_mid)) / 2
-        R.assign_labels(ms, R.text_labels(msp, box), xc)
-        data[name] = {"ms": ms, "L": L, "R": Rr, "xc": xc}
+        labs = R.text_labels(msp, box)
+        R.assign_labels(ms, labs, xc)
+        guess_sections(ms, labs)
+        data[name] = {"ms": ms, "L": L, "R": Rr, "xc": xc, "segs": R.segments(doc, msp, box), "box": box}
 
     # --- trục z: DT-02 gốc tại bề rộng 7500; DT-01 nối tiếp theo cùng đường thanh cánh
     def halfw(d, y):
@@ -293,12 +330,44 @@ def main(dxf, out):
                 if max(hx) > 60:
                     d.setdefault("skipped_outside", []).append(m)              # đầu xà: dựng ở phần xà
                     continue
-            # thanh cánh: lấy hết chiều dài thanh (đường tâm vẽ ngắn hơn); thanh khác: đường tâm vẽ tới nút
-            P1, P2 = (to3(m["p1"]), to3(m["p2"])) if is_leg else (to3(m["c1"]), to3(m["c2"]))
+            # thanh cánh: MỘT thanh liền suốt chiều cao vẽ (theo nét mép); thanh khác: đường tâm vẽ tới nút
+            if is_leg:
+                main = legL if any(m is q for q in piecesL) else legR
+                if m is not main:
+                    continue
+                e1_, e2_ = leg_extent(d, main)
+                P1, P2 = to3(e1_), to3(e2_)
+            else:
+                P1, P2 = to3(m["c1"]), to3(m["c2"])
             bars.append({"seg": name, "leg": is_leg,
                          "leg_side": ("L" if any(m is q for q in piecesL) else "R") if is_leg else None,
                          "P1": P1, "P2": P2, "m": m})
         d["tup"], d["nface"] = tup, nface
+        # nét bản vẽ đã chiếu sang tọa độ mặt trước (x, z) để kiểm tra chồng hình
+        d["check_lines"] = [[[float(v) for v in to3(sg["a"])[[0, 2]]], [float(v) for v in to3(sg["b"])[[0, 2]]], sg["k"]]
+                            for sg in d["segs"]]
+        # --- bản mã (lớp Banma) và bu lông (khối 1/2/3 = M16/M20/M24) vẽ trên mặt đứng
+        x0, y0, x1, y1 = d["box"]
+        inb = lambda p: x0 <= p[0] <= x1 and y0 <= p[1] <= y1
+        legsec0 = section_props(legL["section"], lib_cache)
+        gl0 = (legL.get("heel_to_center") or legsec0["b"] / 2) / 1000.0
+        thk = [(int(t.dxf.text.split()[1]), (t.dxf.insert[0], t.dxf.insert[1])) for t in msp.query("TEXT")
+               if t.dxf.text.strip().startswith("d ") and t.dxf.text.split()[-1].isdigit() and inb(t.dxf.insert)]
+        inside_body = lambda p: abs(p[0] - d["xc"]) * SC <= halfw(d, p[1]) + 80
+        d["plates3"] = []
+        for e in msp.query('LWPOLYLINE[layer=="Banma"]'):
+            pts = [(q[0], q[1]) for q in e.get_points()]
+            if not pts or not all(inb(q) for q in pts) or not any(inside_body(q) for q in pts):
+                continue
+            cxy = (sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts))
+            near = sorted(thk, key=lambda t: math.dist(t[1], cxy))
+            t_mm = near[0][0] if near and math.dist(near[0][1], cxy) < 40 else 8
+            d["plates3"].append({"pts": [to3(q) + nface * gl0 for q in pts], "t_mm": t_mm})
+        d["bolts3"] = []
+        for e in msp.query("INSERT"):
+            if e.dxf.name in ("1", "2", "3") and inb(e.dxf.insert) and inside_body(e.dxf.insert):
+                q = (e.dxf.insert[0], e.dxf.insert[1])
+                d["bolts3"].append({"p": to3(q) + nface * gl0, "d_mm": {"1": 16, "2": 20, "3": 24}[e.dxf.name]})
 
     # --- 4 mặt bằng xoay 90°; thanh cánh chỉ lấy thanh trái của mặt trước rồi xoay (4 góc)
     out_members = []
@@ -461,14 +530,41 @@ def main(dxf, out):
     report["plan_duplicates_removed"] = len(out_members) - len(uniq)
     out_members = uniq
 
+    plates_out, bolts_out = [], []
+    for name in ELEV:
+        d = data[name]
+        for k in FACES[name]:
+            Rk = rot(k * math.pi / 2)
+            n = Rk @ d["nface"]
+            a1 = Rk @ np.array([1.0, 0, 0])
+            a2 = Rk @ d["tup"]
+            for pl in d["plates3"]:
+                P = [Rk @ q for q in pl["pts"]]
+                o = P[0]
+                poly = [[round(float(np.dot(q - o, a1)), 5), round(float(np.dot(q - o, a2)), 5)] for q in P]
+                area = abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                               for i in range(len(poly)))) / 2
+                plates_out.append({"kind": "gusset", "node": o.round(4).tolist(), "members": [], "t_mm": pl["t_mm"],
+                                   "on_leg": True, "origin": o.round(5).tolist(), "a1": a1.round(6).tolist(),
+                                   "a2": a2.round(6).tolist(), "thick_dir": n.round(6).tolist(), "poly": poly,
+                                   "area_m2": round(area, 5), "mass_kg": round(area * pl["t_mm"] / 1000 * 7850, 2),
+                                   "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0, "reason": f"bản vẽ {name}"})
+            for b in d["bolts3"]:
+                p = Rk @ b["p"]
+                bolts_out.append({"id": 0, "p": p.round(5).tolist(), "axis": n.round(6).tolist(),
+                                  "nut": n.round(6).tolist(), "d_mm": b["d_mm"], "t_mm": 10, "kind": "drawing"})
+    report["n_plates"] = len(plates_out)
+    report["n_bolts"] = len(bolts_out)
+
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
-    scene = {"members": out_members, "sections": lib_cache, "nodes": [], "plates": [], "bolts": [],
+    scene = {"members": out_members, "sections": lib_cache, "nodes": [], "plates": plates_out, "bolts": bolts_out,
              "report": {"total_mass_kg": round(sum(m["mass_kg"] for m in out_members), 1),
                         "orientation": {"x_members": {"outside": [], "inside": []}, "clash_other": [],
                                         "clash_coplanar_overlap": [], "overridden": []},
                         "build": report}}
     (out / "n122_scene.json").write_text(json.dumps(scene, ensure_ascii=False))
+    (out / "n122_check_lines.json").write_text(json.dumps({k: v["check_lines"] for k, v in data.items()}))
     print(f"Thanh: {len(out_members)} | tiết diện: {sorted(lib_cache)}")
     print("Độ dốc DT-02 / DT-01:", round(slope, 5), round(slope1, 5), "| z đáy đường thanh cánh DT-01:", round(z_at))
     zs = [c for m in out_members for c in (m["p1"][2], m["p2"][2])]
