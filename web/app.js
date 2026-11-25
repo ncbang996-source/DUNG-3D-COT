@@ -289,6 +289,7 @@ function buildBolts() {
     M.compose(c.clone().addScaledVector(nd, -(grip / 2 + 0.35 * d)), q, new THREE.Vector3(1.7 * d, 0.65 * d, 1.7 * d)); heads.setMatrixAt(i, M);
     M.compose(c.clone().addScaledVector(nd, grip / 2 + 0.4 * d), q, new THREE.Vector3(1.8 * d, 0.8 * d, 1.8 * d)); nuts.setMatrixAt(i, M);
   });
+  for (const im of [shafts, heads, nuts]) im.userData.bolts = true;
   boltGroup.add(shafts, heads, nuts);
 }
 
@@ -374,12 +375,103 @@ function showPlate(k) {
     ['Chiều dày', pl.t_mm + ' mm'], ['Diện tích', fmt(pl.area_m2 * 1e4, 0) + ' cm²'],
     ['Khối lượng', fmt(pl.mass_kg, 2) + ' kg'], ['Thanh nối', pl.members.join(', ')],
     ['Bu lông lớn nhất', `${pl.bolt_max} con / đầu thanh, d = ${pl.d_max_mm} mm`],
+    ['Cạnh đường bao (mm)', pl.poly.map((p, i) => {
+      const q = pl.poly[(i + 1) % pl.poly.length];
+      return Math.round(Math.hypot(q[0] - p[0], q[1] - p[1]) * 1000);
+    }).join(' · ')],
   ];
   $('iTable').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
   $('secSvg').innerHTML = '';
   $('iVariant').innerHTML = '<option>—</option>';
   $('iVariant').disabled = $('applyGroup').disabled = $('resetVar').disabled = true;
 }
+
+function showBolt(i) {
+  const b = DATA.bolts[i];
+  $('info').hidden = false;
+  $('iId').textContent = '';
+  $('info').querySelector('h2').firstChild.textContent = 'Bu lông ';
+  const rows = [
+    ['Đường kính', 'M' + b.d_mm],
+    ['Chiều dài', b.L_mm != null ? b.L_mm + ' mm' : '—'],
+    ['Nguồn chiều dài', b.L_from || '—'],
+    ['Chiều dày kẹp', b.grip_mm != null ? b.grip_mm + ' mm' : '—'],
+    ['Loại', b.kind || ''],
+    ['Tọa độ mặt tựa đầu (mm)', b.p.map((v) => Math.round(v * 1000)).join(', ')],
+  ];
+  $('iTable').innerHTML = rows.map(([a, c]) => `<tr><td>${a}</td><td>${c}</td></tr>`).join('');
+  $('secSvg').innerHTML = '';
+  $('iVariant').innerHTML = '<option>—</option>';
+  $('iVariant').disabled = $('applyGroup').disabled = $('resetVar').disabled = true;
+}
+
+// ---------------------------------------------------------------- đo khoảng cách
+const measureGroup = new THREE.Group();
+scene.add(measureGroup);
+const measure = { on: false, pts: [] };
+function setMeasure(on) {
+  measure.on = on;
+  $('btnMeasure').textContent = on ? 'Đang đo… (nhấn để tắt)' : 'Đo khoảng cách';
+  renderer.domElement.style.cursor = on ? 'crosshair' : '';
+}
+function clearMeasure() {
+  measure.pts = [];
+  while (measureGroup.children.length) {
+    const o = measureGroup.children.pop();
+    if (o.element) o.element.remove();
+  }
+  $('measureOut').innerHTML = 'Đã xóa. Nhấn 2 điểm để đo.';
+  requestRender();
+}
+function snapPoint(hit, ev) {
+  // bắt vào đỉnh gần nhất của khối được nhấn nếu cách con trỏ < 14 px trên màn hình
+  const r = renderer.domElement.getBoundingClientRect();
+  const geo = hit.object.geometry, pos = geo && geo.attributes.position;
+  let best = null;
+  if (pos && !hit.object.isInstancedMesh && hit.face) {
+    const cand = [hit.face.a, hit.face.b, hit.face.c];
+    for (const ix of cand) {
+      const v = new THREE.Vector3().fromBufferAttribute(pos, ix).applyMatrix4(hit.object.matrixWorld);
+      const sp = v.clone().project(camera);
+      const sx = (sp.x + 1) / 2 * r.width + r.left, sy = (1 - sp.y) / 2 * r.height + r.top;
+      const d = Math.hypot(sx - ev.clientX, sy - ev.clientY);
+      if (d < 14 && (!best || d < best.d)) best = { v, d };
+    }
+  }
+  return best ? { p: best.v, snapped: true } : { p: hit.point.clone(), snapped: false };
+}
+function addMeasurePoint(p, snapped) {
+  if (measure.pts.length === 2) clearMeasure();
+  measure.pts.push(p);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff00aa }));
+  dot.position.copy(p);
+  measureGroup.add(dot);
+  const f = (v) => v.toArray().map((x) => Math.round(x * 1000)).join(', ');
+  if (measure.pts.length === 1) {
+    $('measureOut').innerHTML = `Điểm 1${snapped ? ' (bắt đỉnh)' : ''}: (${f(p)}) mm. Nhấn điểm 2.`;
+  } else {
+    const [a, b] = measure.pts;
+    const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+    measureGroup.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xff00aa, depthTest: false })));
+    const d = a.distanceTo(b) * 1000, dv = b.clone().sub(a).multiplyScalar(1000);
+    const el = document.createElement('div');
+    el.className = 'lbl mem';
+    el.style.background = '#ff00aa'; el.style.color = '#fff';
+    el.textContent = Math.round(d) + ' mm';
+    const lab = new CSS2DObject(el);
+    lab.position.copy(a.clone().lerp(b, 0.5));
+    measureGroup.add(lab);
+    $('measureOut').innerHTML = `<b>Khoảng cách: ${fmt(d, 1)} mm</b><br>ΔX ${fmt(dv.x, 1)} · ΔY ${fmt(dv.y, 1)} · ΔZ ${fmt(dv.z, 1)} mm` +
+      `<br><span class="muted">Điểm 1 (${f(a)}), điểm 2 (${f(b)}) mm${snapped ? ' · điểm 2 bắt đỉnh' : ''}</span>`;
+  }
+  requestRender();
+}
+$('btnMeasure').addEventListener('click', () => setMeasure(!measure.on));
+$('btnMeasureClear').addEventListener('click', clearMeasure);
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'm' || e.key === 'M') setMeasure(!measure.on);
+  if (e.key === 'Escape') clearMeasure();
+});
 
 function drawSection(m) {
   const s = sections[m.section];
@@ -410,7 +502,13 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   ray.setFromCamera(ptr, camera);
   const objs = [...meshes.values()].filter((x) => x.visible && x.userData.pickable);
   if (plateGroup.visible) objs.push(...plateGroup.children);
+  if (boltGroup.visible) objs.push(...boltGroup.children);
   const hit = ray.intersectObjects(objs)[0];
+  if (measure.on) {
+    if (hit) { const sp = snapPoint(hit, e); addMeasurePoint(sp.p, sp.snapped); }
+    return;
+  }
+  if (hit && hit.object.userData.bolts && hit.instanceId !== undefined) { select(null); showBolt(hit.instanceId); return; }
   if (hit && hit.object.userData.plate !== undefined) { select(null); showPlate(hit.object.userData.plate); return; }
   select(hit ? hit.object.userData.id : null);
 });
@@ -572,4 +670,4 @@ function requestRender() {
 }
 
 // cho kiểm thử tự động
-window.__app = { select, state, meshes, byId: () => byId, camera, controls, requestRender };
+window.__app = { select, state, meshes, byId: () => byId, camera, controls, requestRender, addMeasurePoint, setMeasure };
