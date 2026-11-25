@@ -35,3 +35,33 @@ Nguồn: `BVTC_COT_N122-3230.dxf` (AC1032, 6 tờ A1: ghi chú chung, xà X1/X2,
   300 mm) để áp vào cánh thanh cánh, vát cánh 25×25 ở góc; mỗi đầu 1 bu lông M16 (`1.16_40`),
   nút giao giữa vách 3 bu lông (`3.16_40`).
 - Bản mã đế (chân cột) có chi tiết hàn A, B, bản mã đế bu lông neo.
+
+## 3. Đọc tự động mặt đứng (tools/bvtc/members2d.py)
+
+Cách đọc: mỗi thanh thép góc trên mặt đứng (nhìn TỪ NGOÀI vào, tỉ lệ 1/25) gồm 2 nét mép, 1 đường
+tâm (CENTER) và 1 nét chiều dày cánh còn lại sát mép LƯNG. Nét chiều dày là nét KHUẤT (HIDDEN) khi
+cánh còn lại chĩa vào trong (thanh nằm TRONG), là nét LIỀN khi cánh chĩa ra ngoài (thanh nằm NGOÀI).
+Phía có nét chiều dày là phía góc lưng.
+
+### Kết quả DT-01 (đoạn thân trên)
+| Loại thanh | Trong/ngoài | Góc lưng | Số thanh |
+|---|---|---|---|
+| Thanh cánh HL150x12 | cánh còn lại vào trong | lưng ra góc ngoài | 5 đoạn |
+| Chéo chữ X đi lên về bên TRÁI | NGOÀI | trên | 4 |
+| Chéo chữ X đi lên về bên PHẢI | TRONG | trên | 4 |
+| Thanh ngang | TRONG | trên | 3 |
+
+- Đường tâm thanh xiên = đường đinh b/2 (L80: 40, L90: 45, L60: 30).
+- Các đường tâm thanh xiên và thanh ngang gặp nhau ĐÚNG trên đường tâm thanh cánh.
+- Đường tâm thanh cánh HL150x12 cách lưng 80 mm (không phải 75); mối nối thanh cánh có thêm 2 đường
+  đinh 50 và 95 mm (bu lông so le).
+
+### Kết quả DT-02 (đoạn chân, giằng chữ K / chữ A, không có cặp chữ X)
+| Loại thanh | Trong/ngoài | Góc lưng | Số thanh |
+|---|---|---|---|
+| Thanh cánh HL150x12 | vào trong | ra góc ngoài | 3 |
+| Thanh ngang | TRONG | trên | 7 |
+| Thanh xiên (L60-L90) | TRONG | trên | 9 |
+| Thanh xiên chính chữ A L100x7 | TRONG | DƯỚI | 2 |
+| Thanh phụ L50x4 | NGOÀI | dưới | 2 |
+| Thanh phụ L65x5 | NGOÀI | trên | 1 |
