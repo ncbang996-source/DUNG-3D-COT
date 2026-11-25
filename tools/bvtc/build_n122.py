@@ -212,6 +212,38 @@ def leg_extent(d, leg):
     return (x1 + ux * min(ss), y1 + uy * min(ss)), (x1 + ux * max(ss), y1 + uy * max(ss))
 
 
+def point_in_poly(p, poly):
+    x, y = p
+    inside = False
+    for i in range(len(poly)):
+        (x1, y1), (x2, y2) = poly[i], poly[(i + 1) % len(poly)]
+        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
+            inside = not inside
+    return inside
+
+
+def dist_seg(p, a, b):
+    ax, ay = b[0] - a[0], b[1] - a[1]
+    L2 = ax * ax + ay * ay
+    t = 0.0 if L2 == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * ax + (p[1] - a[1]) * ay) / L2))
+    return math.dist(p, (a[0] + t * ax, a[1] + t * ay))
+
+
+def working_points(lines):
+    """Nút liên kết 2D: giao điểm các đường tim (trong phạm vi hai đoạn, dung sai 0,5 đơn vị)."""
+    pts = []
+    for i, (a1, a2) in enumerate(lines):
+        for b1, b2 in lines[i + 1:]:
+            d = (a1[0] - a2[0]) * (b1[1] - b2[1]) - (a1[1] - a2[1]) * (b1[0] - b2[0])
+            if abs(d) < 1e-9:
+                continue
+            t = ((a1[0] - b1[0]) * (b1[1] - b2[1]) - (a1[1] - b1[1]) * (b1[0] - b2[0])) / d
+            p = (a1[0] + t * (a2[0] - a1[0]), a1[1] + t * (a2[1] - a1[1]))
+            if dist_seg(p, a1, a2) < 0.5 and dist_seg(p, b1, b2) < 0.5:
+                pts.append(p)
+    return pts
+
+
 def line_x_at(m, y):
     (x1, y1), (x2, y2) = m["c1"], m["c2"]
     return x1 + (y - y1) * (x2 - x1) / (y2 - y1)
@@ -339,6 +371,7 @@ def main(dxf, out):
                 P1, P2 = to3(e1_), to3(e2_)
             else:
                 P1, P2 = to3(m["c1"]), to3(m["c2"])
+            d.setdefault("kept2d", []).append((m["c1"], m["c2"]) if not is_leg else leg_extent(d, main))
             bars.append({"seg": name, "leg": is_leg,
                          "leg_side": ("L" if any(m is q for q in piecesL) else "R") if is_leg else None,
                          "P1": P1, "P2": P2, "m": m})
@@ -355,10 +388,20 @@ def main(dxf, out):
                if t.dxf.text.strip().startswith("d ") and t.dxf.text.split()[-1].isdigit() and inb(t.dxf.insert)]
         inside_body = lambda p: abs(p[0] - d["xc"]) * SC <= halfw(d, p[1]) + 80
         d["plates3"] = []
+        kept2d = d.get("kept2d", [])
+        nodes2d = working_points(kept2d)
+        d["dropped_plates"] = 0
+        plates2d = []
         for e in msp.query('LWPOLYLINE[layer=="Banma"]'):
             pts = [(q[0], q[1]) for q in e.get_points()]
             if not pts or not all(inb(q) for q in pts) or not any(inside_body(q) for q in pts):
                 continue
+            # chỉ giữ bản mã có nút liên kết nằm trong (loại hình chi tiết bản mã vẽ riêng trong khung)
+            if not any(point_in_poly(n_, pts) or min(dist_seg(n_, pts[i], pts[(i + 1) % len(pts)])
+                                                       for i in range(len(pts))) < 0.6 for n_ in nodes2d):
+                d["dropped_plates"] += 1
+                continue
+            plates2d.append(pts)
             cxy = (sum(q[0] for q in pts) / len(pts), sum(q[1] for q in pts) / len(pts))
             near = sorted(thk, key=lambda t: math.dist(t[1], cxy))
             t_mm = near[0][0] if near and math.dist(near[0][1], cxy) < 40 else 8
@@ -367,6 +410,11 @@ def main(dxf, out):
         for e in msp.query("INSERT"):
             if e.dxf.name in ("1", "2", "3") and inb(e.dxf.insert) and inside_body(e.dxf.insert):
                 q = (e.dxf.insert[0], e.dxf.insert[1])
+                # chỉ giữ bu lông nằm trên bản mã giữ lại hoặc trên thanh (cách đường tim < 75 mm)
+                if not (any(point_in_poly(q, pp) for pp in plates2d) or
+                        any(dist_seg(q, a_, b_) < 3.0 for a_, b_ in kept2d)):
+                    d["dropped_bolts"] = d.get("dropped_bolts", 0) + 1
+                    continue
                 d["bolts3"].append({"p": to3(q) + nface * gl0, "d_mm": {"1": 16, "2": 20, "3": 24}[e.dxf.name]})
 
     # --- 4 mặt bằng xoay 90°; thanh cánh chỉ lấy thanh trái của mặt trước rồi xoay (4 góc)
@@ -530,6 +578,29 @@ def main(dxf, out):
     report["plan_duplicates_removed"] = len(out_members) - len(uniq)
     out_members = uniq
 
+    # thanh vách: hai đầu phải nối vào thanh khác (cách < 120 mm), lặp tới khi ổn định
+    def d3(p, a, b):
+        a, b, p = np.asarray(a), np.asarray(b), np.asarray(p)
+        ab = b - a
+        t = np.clip(np.dot(p - a, ab) / max(np.dot(ab, ab), 1e-12), 0, 1)
+        return np.linalg.norm(p - (a + t * ab))
+    dropped = []
+    while True:
+        bad = []
+        for m in out_members:
+            if m["rule"] != "plan":
+                continue
+            for p in (m["p1"], m["p2"]):
+                if not any(o is not m and d3(p, o["p1"], o["p2"]) < 0.12 for o in out_members):
+                    bad.append(m)
+                    break
+        if not bad:
+            break
+        ids = {id(m) for m in bad}
+        dropped += [(m["seg"], m["section"]) for m in bad]
+        out_members = [m for m in out_members if id(m) not in ids]
+    report["plan_members_dropped_unconnected"] = dropped
+
     plates_out, bolts_out = [], []
     for name in ELEV:
         d = data[name]
@@ -554,6 +625,8 @@ def main(dxf, out):
                 bolts_out.append({"id": 0, "p": p.round(5).tolist(), "axis": n.round(6).tolist(),
                                   "nut": n.round(6).tolist(), "d_mm": b["d_mm"], "t_mm": 10, "kind": "drawing"})
     report["n_plates"] = len(plates_out)
+    report["plates_dropped_no_node"] = {k: v.get("dropped_plates", 0) for k, v in data.items()}
+    report["bolts_dropped"] = {k: v.get("dropped_bolts", 0) for k, v in data.items()}
     report["n_bolts"] = len(bolts_out)
 
     out = Path(out)
