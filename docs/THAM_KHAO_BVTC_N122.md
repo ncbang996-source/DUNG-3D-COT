@@ -90,5 +90,6 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
 - Chân cột: đọc đúng từ DXF (chi tiết 1/10): bản đế 450x450x40, lưng thanh cánh cách mép ngoài 200; 4 lỗ neo Ø64
   tại 100/350; sườn 1 (545x490, 13 lỗ), sườn 3 (345x490, 13 lỗ), sườn 2 (260x490, không lỗ). Vị trí sườn 1, 3
   khớp lỗ với bu lông chân thanh cánh trên mặt đứng (lệch <= 5 mm); suy ra lưng thanh cánh cách đường tim 79,5 mm
-  (bản vẽ ghi 80). Chưa khớp: sườn 2 rộng 260 theo chi tiết nhưng mặt bằng bản đế chỉ vẽ 188.
+  (bản vẽ ghi 80). Mặt đứng: mặt trên bản đế = đầu dưới thanh cánh = đáy sườn (cao độ 0). Cạnh xiên sườn 2 (độ dốc
+  = độ nghiêng thanh cánh) áp dọc mặt ngoài sườn 1 -> đáy sườn 2 dài 188 (khớp mặt bằng), đỉnh rộng 260 (khớp chi tiết).
 - Bỏ 24 bu lông mặt cắt không nằm trên thanh nào (cách trục > 100 mm).

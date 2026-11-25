@@ -568,11 +568,15 @@ def main(dxf, outdir):
     #   => góc lưng thanh cánh ở |x| = 3771; mặt bằng bản đế: lưng cách mép ngoài 200, bản 450x450x40,
     #      sườn 1 bắt đầu từ mép bản (3771 + 200 = 3971 khớp); sườn 2 nối tiếp sườn 3 ra ngoài, sau sườn 1.
     HEEL = 3771.0
+    slope_abs = abs(slope)
     Z0 = 11.0
     T_RIB = 12.0
     rib_specs = [(RIB1, lambda u: -3971.0 + u, "sườn 1 (545x490, 13 lỗ)"),
                  (RIB3, lambda u: HEEL - u, "sườn 3 (345x490, 13 lỗ)"),
-                 (RIB2, lambda u: HEEL + T_RIB + (260 - u), "sườn 2 (260x490, không lỗ; mặt bằng ghi 188 - cần kiểm)")]
+                 # cạnh xiên (192,30)-(260,490) của sườn 2 có độ dốc = độ nghiêng thanh cánh -> áp dọc mặt ngoài sườn 1
+                 (RIB2, lambda u: HEEL + T_RIB - slope_abs * 490 * tup[2] + (260 - u),
+                  "sườn 2 (260x490, không lỗ; mặt bằng bản đế vẽ 188 - cần kiểm)")]
+    rep["base_note"] = "mặt đứng: mặt trên bản đế = đầu dưới thanh cánh = đáy sườn (cao độ 0)"
     h_base = halfw(y0)
     rep["base_heel_minus_working_mm"] = round(HEEL - h_base, 1)
     for k in range(4):
@@ -583,7 +587,10 @@ def main(dxf, outdir):
             pts3 = []
             for u, v in poly:
                 xface = xf(u)
-                p = np.array([xface, -h_base, Z0]) / 1000 + tu * v / 1000 + nf * gl / 1000
+                # đáy sườn nằm trên mặt phẳng lưng cánh thanh cánh (δ = g) tại cao độ 0 (mặt trên bản đế)
+                p0 = np.array([xface, -h_base, 0.0]) / 1000 + nf * gl / 1000
+                p0 = p0 - tup * (p0[2] / tup[2])
+                p = p0 + tup * v / 1000
                 pts3.append(Rk @ p)
             o = pts3[0]
             a1 = Rk @ ex
