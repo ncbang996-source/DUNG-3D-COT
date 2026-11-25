@@ -89,9 +89,23 @@ function frameOf(m, v) {
   return m.frames[v];
 }
 
+// Cắt đa giác giữ phần s2 <= h (Sutherland–Hodgman với một nửa mặt phẳng).
+function clipBelow(poly, h) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const ina = a[1] <= h + 1e-9, inb = b[1] <= h + 1e-9;
+    if (ina) out.push(a);
+    if (ina !== inb) { const t = (h - a[1]) / (b[1] - a[1]); out.push([a[0] + t * (b[0] - a[0]), h]); }
+  }
+  return out;
+}
+
 function buildGeometry(m) {
   const s = sections[m.section];
-  const prof = s.profile;                           // mm, heel at origin
+  const chamfer = !!m.chamfer;
+  // thanh vát: phần cánh không khoan lỗ cao hơn h0 = t + r1 dựng riêng (hình thang), profile cắt tại h0
+  const prof = chamfer ? clipBelow(s.profile, s.t + s.r1) : s.profile;   // mm, heel at origin
   const [g1, g2] = m.g;                              // mm
   const [e1, e2] = frameOf(m, m.variant).map((a) => new THREE.Vector3(...a));
   // đầu thanh vẽ: điểm DXF (hoặc điểm bắt đã dời) + dịch ép sát cánh thanh cánh + đẩy ra khỏi bản mã
@@ -110,6 +124,19 @@ function buildGeometry(m) {
   }
   const tris = THREE.ShapeUtils.triangulateShape(prof.map(([a, b]) => new THREE.Vector2(a, b)), []);
   for (const [a, b, c] of tris) { push(r0[a], r0[c], r0[b]); push(r1[a], r1[b], r1[c]); }
+  if (chamfer) {
+    // cánh không khoan lỗ (dọc s2, dày theo s1): hình thang vát 45° hai đầu, từ chiều cao h0 tới b
+    const h0 = s.t + s.r1, L = p1.distanceTo(p2) * 1000, c = Math.min(s.b - h0, L / 2);
+    const u = p2.clone().sub(p1).normalize();
+    const P = (x, a, b) => {
+      const t = x / L;                 // x tính từ p1 (mm); nội suy p1-p2 để giữ độ dịch từng đầu
+      return p1.clone().lerp(p2, t).addScaledVector(e1, (a - g1) / 1000).addScaledVector(e2, (b - g2) / 1000);
+    };
+    const quad = [[0, h0], [L, h0], [L - c, h0 + c], [c, h0 + c]];  // (x, s2)
+    const A0 = quad.map(([x, b]) => P(x, 0, b)), A1 = quad.map(([x, b]) => P(x, s.t, b));
+    for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; push(A0[i], A0[j], A1[j], A0[i], A1[j], A1[i]); }
+    push(A0[0], A0[2], A0[1], A0[0], A0[3], A0[2], A1[0], A1[1], A1[2], A1[0], A1[2], A1[3]);
+  }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.computeVertexNormals();
@@ -173,6 +200,8 @@ function rebuildMember(m) {
 // ---------------------------------------------------------------- bản mã, bu lông
 const plateMat = new THREE.MeshStandardMaterial({ color: 0x2f9e8f, metalness: 0.3, roughness: 0.55, side: THREE.DoubleSide });
 const boltMat = new THREE.MeshStandardMaterial({ color: 0xd4a017, metalness: 0.6, roughness: 0.35 });
+const nutMat = new THREE.MeshStandardMaterial({ color: 0xb03a2e, metalness: 0.5, roughness: 0.4 });   // đai ốc (đỏ) để thấy hướng
+const fillerMat = new THREE.MeshStandardMaterial({ color: 0x7a5cc4, metalness: 0.3, roughness: 0.5, side: THREE.DoubleSide });
 function buildPlates() {
   for (const [k, pl] of (DATA.plates || []).entries()) {
     const o = new THREE.Vector3(...pl.origin), a1 = new THREE.Vector3(...pl.a1), a2 = new THREE.Vector3(...pl.a2);
@@ -187,7 +216,7 @@ function buildPlates() {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, plateMat);
+    const mesh = new THREE.Mesh(geo, pl.kind === 'filler' ? fillerMat : plateMat);
     mesh.userData = { plate: k, pickable: true };
     plateGroup.add(mesh);
   }
@@ -195,18 +224,24 @@ function buildPlates() {
 function buildBolts() {
   const bolts = DATA.bolts || [];
   if (!bolts.length) return;
-  const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);   // trục Y, sẽ co giãn
-  const inst = new THREE.InstancedMesh(geo, boltMat, bolts.length);
+  const shaftGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);   // trục Y, co giãn theo bu lông
+  const nutGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 6);      // lục giác
+  const shafts = new THREE.InstancedMesh(shaftGeo, boltMat, bolts.length);
+  const heads = new THREE.InstancedMesh(nutGeo, boltMat, bolts.length);
+  const nuts = new THREE.InstancedMesh(nutGeo, nutMat, bolts.length);
   const Y = new THREE.Vector3(0, 1, 0), M = new THREE.Matrix4(), q = new THREE.Quaternion();
   bolts.forEach((b, i) => {
-    const d = b.d_mm / 1000, ax = new THREE.Vector3(...b.axis);
-    const len = (b.t_mm * 2) / 1000 + 1.4 * d;                // thanh + phần liên kết + đầu, đai ốc
-    const c = new THREE.Vector3(...b.p).addScaledVector(ax, b.t_mm / 2000);
-    q.setFromUnitVectors(Y, ax);
-    M.compose(c, q, new THREE.Vector3(d, len, d));
-    inst.setMatrixAt(i, M);
+    const d = b.d_mm / 1000, nd = new THREE.Vector3(...(b.nut || b.axis));
+    const grip = b.t_mm / 1000 + (b.centered ? 0 : b.t_mm / 1000);   // chiều dày kẹp ước lượng
+    // tâm kẹp: bu lông thanh nằm trên mặt lưng, kẹp về hai phía; bu lông giao chữ X ở giữa khe hở
+    const c = new THREE.Vector3(...b.p);
+    q.setFromUnitVectors(Y, nd);
+    const len = grip + 1.6 * d;
+    M.compose(c.clone().addScaledVector(nd, 0.2 * d), q, new THREE.Vector3(d, len, d)); shafts.setMatrixAt(i, M);
+    M.compose(c.clone().addScaledVector(nd, -(grip / 2 + 0.35 * d)), q, new THREE.Vector3(1.7 * d, 0.65 * d, 1.7 * d)); heads.setMatrixAt(i, M);
+    M.compose(c.clone().addScaledVector(nd, grip / 2 + 0.4 * d), q, new THREE.Vector3(1.8 * d, 0.8 * d, 1.8 * d)); nuts.setMatrixAt(i, M);
   });
-  boltGroup.add(inst);
+  boltGroup.add(shafts, heads, nuts);
 }
 
 // ---------------------------------------------------------------- labels
@@ -281,7 +316,9 @@ function showPlate(k) {
   $('iId').textContent = '';
   $('info').querySelector('h2').firstChild.textContent = 'Bản mã ';
   const rows = [
-    ['Loại', pl.filler_x ? 'Bản đệm nút giao chữ X' : pl.on_leg ? 'Bản mã áp cánh thanh cánh' : 'Bản mã'],
+    ['Loại', pl.kind === 'filler' ? 'Tấm đệm 45×45 nút giao chữ X' : pl.on_leg ? 'Bản mã áp cánh thanh cánh' : 'Bản mã'],
+    ['Lý do', pl.reason || ''],
+    ...(pl.leg_bolts ? [['Bu lông bắt thanh cánh', `${pl.leg_bolts} × M${pl.d_max_mm}`]] : []),
     ['Chiều dày', pl.t_mm + ' mm'], ['Diện tích', fmt(pl.area_m2 * 1e4, 0) + ' cm²'],
     ['Khối lượng', fmt(pl.mass_kg, 2) + ' kg'], ['Thanh nối', pl.members.join(', ')],
     ['Bu lông lớn nhất', `${pl.bolt_max} con / đầu thanh, d = ${pl.d_max_mm} mm`],
@@ -381,15 +418,15 @@ function stats() {
 function platesStats() {
   const P = DATA.plates || [], B = DATA.bolts || [];
   const byT = {};
-  for (const p of P) { const s = (byT[p.t_mm] ??= { n: 0, a: 0, m: 0 }); s.n++; s.a += p.area_m2; s.m += p.mass_kg; }
+  for (const p of P) { const key = (p.kind === 'filler' ? 'Tấm đệm ' : 'Bản mã ') + p.t_mm; const s = (byT[key] ??= { n: 0, a: 0, m: 0 }); s.n++; s.a += p.area_m2; s.m += p.mass_kg; }
   const byD = {};
   for (const b of B) byD['M' + b.d_mm] = (byD['M' + b.d_mm] || 0) + 1;
   const pm = P.reduce((a, p) => a + p.mass_kg, 0);
-  return `<h3>Bản mã (A × t × 7850)</h3><table><tr><th>Chiều dày (mm)</th><th>Số bản</th><th>Diện tích (m²)</th><th>Khối lượng (kg)</th></tr>` +
-    Object.entries(byT).sort((a, b) => a[0] - b[0]).map(([t, s]) => `<tr><td>${t}</td><td>${s.n}</td><td>${fmt(s.a, 3)}</td><td>${fmt(s.m, 1)}</td></tr>`).join('') +
+  return `<h3>Bản mã (A × t × 7850)</h3><table><tr><th>Loại, dày (mm)</th><th>Số bản</th><th>Diện tích (m²)</th><th>Khối lượng (kg)</th></tr>` +
+    Object.entries(byT).sort((a, b) => a[0].localeCompare(b[0], 'vi', { numeric: true })).map(([t, s]) => `<tr><td>${t}</td><td>${s.n}</td><td>${fmt(s.a, 3)}</td><td>${fmt(s.m, 1)}</td></tr>`).join('') +
     `<tr><th>Tổng</th><th>${P.length}</th><th></th><th>${fmt(pm, 1)}</th></tr></table>` +
     `<h3>Bu lông (không tính mối nối thanh cánh)</h3><p>${Object.entries(byD).map(([k, n]) => `${k}: ${n} con`).join(' · ')}</p>` +
-    `<p class="muted">Bản mã chỉ đặt ở nút có thanh (không tính thanh cánh) hơn 2 bu lông. Bản mã tính theo hướng cánh tự động; đổi hướng trong app không tính lại bản mã.</p>`;
+    `<p class="muted">Bản mã: nút thanh cánh có ≥ 2 thanh cùng mặt tiếp xúc, hoặc thanh > 2 bu lông. Nút giao chữ X: 1 bu lông + tấm đệm 45×45. Bản mã tính theo hướng cánh tự động; đổi hướng trong app không tính lại bản mã.</p>`;
 }
 $('btnStats').addEventListener('click', () => {
   const rows = stats();
@@ -458,8 +495,8 @@ async function load() {
   const tot = members.reduce((a, m) => a + massOf(m), 0);
   const ori = DATA.report.orientation;
   $('summary').innerHTML = `${members.length} thanh · ${DATA.nodes.length} nút · ${secNames.length} tiết diện<br>` +
-    `Khối lượng thanh: <b>${fmt(tot, 0)} kg</b> · bản mã ${(DATA.plates || []).length} bản, ` +
-    `${fmt((DATA.plates || []).reduce((a, p) => a + p.mass_kg, 0), 0)} kg<br>` +
+    `Khối lượng thanh: <b>${fmt(tot, 0)} kg</b> · bản mã ${(DATA.plates || []).filter((p) => p.kind !== 'filler').length} bản, ` +
+    `${fmt((DATA.plates || []).reduce((a, p) => a + p.mass_kg, 0), 0)} kg (kể cả tấm đệm)<br>` +
     `<span class="muted">Cặp chữ X: ${ori.x_members.outside.length} thanh ngoài, ${ori.x_members.inside.length} thanh trong · ` +
     `cấn: ${(ori.clash_other || []).length} cặp, chồng mép cùng mặt phẳng: ${(ori.clash_coplanar_overlap || []).length} cặp.</span>`;
   refreshMaterials();

@@ -1,20 +1,20 @@
 """Giai đoạn 9: bu lông và bản mã (đề xuất, người dùng đã duyệt).
 
-Quy ước:
-- Bu lông mỗi đầu thanh (trừ thanh cánh C/CĐ): số lượng và đường kính theo PDF, chọn phương án ít
-  con nhất, bằng nhau lấy đường kính nhỏ hơn. Một hàng trên đường đinh (giữa cánh liên kết),
-  bu lông ngoài cùng cách đầu thanh 1,5d, khoảng cách giữa các bu lông 3d.
-- Bản mã đặt tại nút có ít nhất một thanh (không tính thanh cánh) hơn 2 bu lông.
-  Tại mỗi nút, các đầu thanh có mặt tiếp xúc (mặt lưng cánh liên kết) trùng nhau thì chung một bản mã.
-- Chiều dày bản mã: chiều dày nhỏ nhất của các thanh nối vào bản mã, làm tròn LÊN theo dãy thép tấm
-  6, 8, 10, 12, 14, 16 mm.
-- Hình bản mã: bao lồi các bu lông (và điểm nút) mở rộng thêm 1,5d tới mép.
-- Nút trên thanh cánh, thanh mặt cột: bản mã áp vào cánh thanh cánh, nằm giữa cánh thanh cánh và
-  các thanh nối; đầu các thanh nối được đẩy ra một đoạn bằng chiều dày bản mã.
-  Nút khác: bản mã nằm phía lưng các thanh nối, không dịch thanh.
-- Nút giao chữ X: thanh ngoài và thanh trong quay lưng vào nhau, hở đúng bằng chiều dày cánh thanh
-  cánh. Hai bản mã phía lưng được gộp thành MỘT bản đệm lấp khe hở này (dày = khe hở, luôn >= chiều
-  dày thanh nối nhỏ nhất vì cánh thanh cánh dày hơn), bu lông xuyên qua cả hai thanh.
+Quy ước (người dùng duyệt; tham khảo bản vẽ chế tạo N122, xem docs/THAM_KHAO_BVTC_N122.md):
+- Bu lông mỗi đầu thanh (trừ thanh cánh C/CĐ): số lượng, đường kính theo PDF (ít con nhất, bằng nhau
+  lấy đường kính nhỏ hơn). Một hàng trên đường đinh (b/2).
+  Khoảng cách tới đầu thanh = max(1,5d, tối thiểu bản vẽ): thanh giằng (G) 25/30/40, thanh chính
+  (X, XĐ, XAD, XAT, XCS) 35/45/50 cho M16/M20/M24. Khoảng cách 2 bu lông = max(3d, 50/60/70).
+- Nút giao chữ X: 1 bu lông xuyên 2 thanh + tấm đệm vuông 45x45 dày bằng khe hở (không bản mã).
+  Đường kính bu lông giao = lớn nhất của các thanh tại nút giao.
+- Bản mã tại nút thanh cánh có >= 2 thanh (mặt cột) bắt cùng một mặt tiếp xúc, hoặc tại nút có thanh
+  > 2 bu lông. Bản mã bắt vào thanh cánh bằng số bu lông = max(số bu lông thanh lớn nhất, 3), đường
+  kính lớn nhất của các thanh nối, trên đường đinh cánh thanh cánh, căn giữa nút, khoảng cách theo
+  thanh chính.
+- Chiều dày bản mã = thanh nối mỏng nhất làm tròn lên 6/8/10/12/14/16. Hình = bao lồi bu lông + 1,5d.
+- Bản mã trên thanh cánh nằm giữa cánh thanh cánh và thanh nối; đầu thanh nối đẩy ra bằng chiều dày
+  bản mã. Nút khác: bản mã phía lưng thanh nối.
+- Đai ốc quay ra ngoài cột (thanh vách ngang/xà: quay xuống).
 
 Chạy sau orientation:  python3 src/plates.py out/
 """
@@ -28,6 +28,20 @@ from pathlib import Path
 import numpy as np
 
 PLATE_SERIES = [6, 8, 10, 12, 14, 16]
+MAIN_TYPES = {"X", "XĐ", "XAD", "XAT", "XCS"}           # thanh chính (không kể thanh cánh)
+END_MIN = {"brace": {16: 25, 20: 30, 24: 40}, "main": {16: 35, 20: 45, 24: 50}}   # mm
+PITCH_MIN = {16: 50, 20: 60, 24: 70}
+EDGE_MIN = {16: 21, 20: 29, 24: 32}
+FILLER = 45.0                                            # mm, tấm đệm vuông
+
+
+def end_dist(type_: str, d_mm: int) -> float:
+    kind = "main" if type_ in MAIN_TYPES else "brace"
+    return max(1.5 * d_mm, END_MIN[kind][d_mm])
+
+
+def pitch(d_mm: int) -> float:
+    return max(3.0 * d_mm, PITCH_MIN[d_mm])
 LEG_TYPES = {"C", "CĐ"}
 DENSITY = 7850.0
 
@@ -78,41 +92,86 @@ def member_geom(m):
     return p1 + off, p2 + off, unit(p2 - p1), e1, e2
 
 
+def circles_hull(pts, origin, a1, a2, r):
+    circ = []
+    for p in pts:
+        q = np.asarray(p) - origin
+        x, y = float(q @ a1), float(q @ a2)
+        for k in range(16):
+            ang = 2 * math.pi * k / 16
+            circ.append((round(x + r * math.cos(ang), 5), round(y + r * math.sin(ang), 5)))
+    return hull(circ)
+
+
+def plane_axes(nrm):
+    a1 = np.cross(nrm, [0, 0, 1])
+    a1 = unit(a1) if np.linalg.norm(a1) > 1e-6 else np.array([1.0, 0, 0])
+    return a1, unit(np.cross(nrm, a1))
+
+
+def nut_dir(axis, at):
+    """Hướng đặt đai ốc: ra ngoài cột (theo phương bán kính); thanh nằm ngang thì quay xuống."""
+    axis = unit(axis)
+    radial = np.array([at[0], at[1], 0.0])
+    if np.linalg.norm(radial) > 1e-6 and abs(np.dot(axis, unit(radial))) > 0.3:
+        return axis if np.dot(axis, radial) > 0 else -axis
+    return axis if axis[2] < 0 else -axis
+
+
 def build(scene_members, lib):
     rep = {"warnings": []}
-    leg_nodes = {tuple(p) for m in scene_members if m["type"] in LEG_TYPES for p in (m["p1"], m["p2"])}
-    leg_t_at = {}
-    for m in scene_members:
-        if m["type"] in LEG_TYPES:
-            for p in (m["p1"], m["p2"]):
-                leg_t_at[tuple(p)] = max(leg_t_at.get(tuple(p), 0), lib[m["section"]]["t"])
+    by_id = {m["id"]: m for m in scene_members}
+    legs = [m for m in scene_members if m["type"] in LEG_TYPES]
+    leg_nodes = {tuple(p) for m in legs for p in (m["p1"], m["p2"])}
 
-    # 1) đầu thanh
+    def leg_at(node):
+        """Thanh cánh tại nút (lấy đoạn phía trên nếu có)."""
+        cand = [m for m in legs if tuple(m["p1"]) == node or tuple(m["p2"]) == node]
+        cand.sort(key=lambda m: -max(m["p1"][2], m["p2"][2]))
+        return cand[0] if cand else None
+
+    # nút giao chữ X: nút không thuộc thanh cánh, có thanh cặp chữ X
+    cross_nodes = {}
+    for m in scene_members:
+        if m.get("x_pair"):
+            for k in ("p1", "p2"):
+                if tuple(m[k]) not in leg_nodes:
+                    cross_nodes.setdefault(tuple(m[k]), []).append(m)
+    cross_nodes = {k: v for k, v in cross_nodes.items() if len(v) >= 4}
+
+    # 1) đầu thanh (bỏ đầu tại nút giao chữ X)
     ends = []
     for m in scene_members:
         if m["type"] in LEG_TYPES or not m.get("bolt"):
             continue
         P1, P2, u, e1, e2 = member_geom(m)
         L = np.linalg.norm(P2 - P1)
-        d = m["bolt"]["d_mm"] / 1000
+        dmm = m["bolt"]["d_mm"]
+        d = dmm / 1000
         n = m["bolt"]["count"]
-        need = 1.5 * d + (n - 1) * 3 * d
+        e0, pt = end_dist(m["type"], dmm) / 1000, pitch(dmm) / 1000
+        b = lib[m["section"]]["b"]
+        if b / 2 < EDGE_MIN[dmm]:
+            rep["warnings"].append(f"Thanh {m['id']} {m['section']}: đường đinh b/2={b/2} < mép tối thiểu {EDGE_MIN[dmm]} ({m['bolt']['size']})")
+        need = e0 + (n - 1) * pt
         if need > L / 2 + 1e-9:
             rep["warnings"].append(f"Thanh {m['id']}: {n} bu lông {m['bolt']['size']} cần {need*1000:.0f} mm "
                                    f"mỗi đầu > nửa chiều dài {L*500:.0f} mm")
         for k, (P, dirv) in enumerate(((P1, u), (P2, -u))):
             node = tuple(m["p1"] if k == 0 else m["p2"])
-            bolts = [P + dirv * (1.5 * d + i * 3 * d) for i in range(n)]
+            if node in cross_nodes:
+                continue
+            bolts = [P + dirv * (e0 + i * pt) for i in range(n)]
             ends.append({"id": m["id"], "end": k, "node": node, "P": P, "n": e2, "bolts": bolts,
-                         "d": d, "count": n, "t": lib[m["section"]]["t"], "rule": m["rule"]})
+                         "d": d, "dmm": dmm, "count": n, "t": lib[m["section"]]["t"], "rule": m["rule"],
+                         "type": m["type"]})
 
-    # 2) gom theo nút + mặt phẳng tiếp xúc
+    # 2) gom theo nút + mặt phẳng tiếp xúc -> bản mã
     by_node: dict[tuple, list] = {}
     for e in ends:
         by_node.setdefault(e["node"], []).append(e)
-    plates, end_shift = [], {}
+    plates, end_shift, extra_bolts = [], {}, []
     for node, es in by_node.items():
-        node_plates = []
         groups = []
         for e in es:
             for g in groups:
@@ -123,101 +182,106 @@ def build(scene_members, lib):
             else:
                 groups.append([e])
         for g in groups:
-            if not any(e["count"] > 2 for e in g):
+            on_leg = node in leg_nodes and all(e["rule"] == "face" for e in g)
+            many = any(e["count"] > 2 for e in g)
+            if not (many or (on_leg and len(g) >= 2)):
                 continue
             nref = g[0]["n"]
-            on_leg = node in leg_nodes and all(e["rule"] == "face" for e in g)
             tp = plate_thickness(min(e["t"] for e in g))
-            same = [e for e in g if np.dot(e["n"], nref) > 0]
-            if len(same) != len(g):
+            if any(np.dot(e["n"], nref) < 0 for e in g):
                 rep["warnings"].append(f"Nút {node}: bản mã có thanh ở cả hai phía, kiểm tra lại")
-            if on_leg:
-                thick_dir = nref                       # bản mã giữa cánh thanh cánh và thanh nối
-                for e in same:
-                    end_shift[(e["id"], e["end"])] = (nref * tp / 1000).tolist()
-            else:
-                thick_dir = -nref                      # bản mã phía lưng thanh nối
             origin = g[0]["P"]
-            a1 = unit(np.cross(nref, [0, 0, 1]))
-            if np.linalg.norm(np.cross(nref, [0, 0, 1])) < 1e-6:
-                a1 = np.array([1.0, 0, 0])
-            a2 = unit(np.cross(nref, a1))
-            dmax = max(e["d"] for e in g)
-            pts = []
-            for e in g:
-                for b in e["bolts"]:
-                    pts.append(b)
+            a1, a2 = plane_axes(nref)
+            pts = [b for e in g for b in e["bolts"]]
+            dmax_mm = max(e["dmm"] for e in g)
+            leg_bolts = []
+            if on_leg:
+                thick_dir = nref
+                for e in g:
+                    end_shift[(e["id"], e["end"])] = (nref * tp / 1000).tolist()
+                # bu lông bắt bản mã vào thanh cánh: trên đường đinh cánh thanh cánh nằm trong mặt này
+                lg = leg_at(node)
+                ls = lib[lg["section"]]
+                bl, ul = ls["b"] / 1000, unit(np.subtract(lg["p2"], lg["p1"]))
+                le1, le2 = np.array(lg["e1"]), np.array(lg["e2"])
+                # cánh có pháp tuyến lưng gần nref nhất: cánh 1 lưng -e2, cánh 2 lưng -e1
+                back = -le2 if abs(np.dot(-le2, nref)) >= abs(np.dot(-le1, nref)) else -le1
+                gauge_pt = np.array(node) + back * (bl / 2)          # trên mặt lưng cánh, cách lưng b/2
+                gauge_pt = gauge_pt + nref * float(np.dot(origin - gauge_pt, nref))   # chiếu lên mặt tiếp xúc
+                nb = max(3, max(e["count"] for e in g))
+                pt = pitch(dmax_mm) / 1000
+                for i in range(nb):
+                    leg_bolts.append(gauge_pt + ul * (i - (nb - 1) / 2) * pt)
+                for bpos in leg_bolts:
+                    extra_bolts.append({"id": lg["id"], "p": bpos, "axis": nref, "d_mm": dmax_mm,
+                                        "t_mm": ls["t"] + tp, "kind": "plate_leg"})
+                pts += leg_bolts
+            else:
+                thick_dir = -nref
             pts.append(np.array(node, float))
-            circ = []
-            for p in pts:
-                q = p - origin
-                x, y = float(q @ a1), float(q @ a2)
-                for k in range(16):
-                    ang = 2 * math.pi * k / 16
-                    circ.append((round(x + 1.5 * dmax * math.cos(ang), 5), round(y + 1.5 * dmax * math.sin(ang), 5)))
-            poly = hull(circ)
+            poly = circles_hull(pts, origin, a1, a2, 1.5 * dmax_mm / 1000)
             area = poly_area(poly)
-            node_plates.append({"_g": g, "_pts": pts, "_dmax": dmax, "_n": nref,
-                                "_tmin": min(e["t"] for e in g)})
-            node_plates[-1].update({
-                "node": list(node), "members": sorted({e["id"] for e in g}), "t_mm": tp,
+            plates.append({
+                "kind": "gusset", "node": list(node), "members": sorted({e["id"] for e in g}), "t_mm": tp,
                 "on_leg": on_leg, "origin": origin.round(5).tolist(), "a1": a1.round(6).tolist(),
-                "a2": a2.round(6).tolist(), "thick_dir": thick_dir.round(6).tolist(),
+                "a2": a2.round(6).tolist(), "thick_dir": unit(thick_dir).round(6).tolist(),
                 "poly": [list(p) for p in poly], "area_m2": round(area, 5),
                 "mass_kg": round(area * tp / 1000 * DENSITY, 2),
-                "bolt_max": max(e["count"] for e in g), "d_max_mm": round(dmax * 1000),
+                "bolt_max": max(e["count"] for e in g), "d_max_mm": dmax_mm,
+                "leg_bolts": len(leg_bolts), "reason": ">2 bu lông" if many else ">=2 thanh tại nút thanh cánh",
             })
-        # gộp hai bản mã quay lưng vào nhau (nút giao chữ X)
-        used = set()
-        for i, a in enumerate(node_plates):
-            for j, b in enumerate(node_plates):
-                if j <= i or i in used or j in used or a["on_leg"] or b["on_leg"]:
-                    continue
-                ta, tb = np.array(a["thick_dir"]), np.array(b["thick_dir"])
-                if np.dot(ta, tb) > -0.999:
-                    continue
-                gap = float(np.dot(np.array(b["origin"]) - np.array(a["origin"]), ta))
-                if not (0 < gap <= (a["t_mm"] + b["t_mm"]) / 1000 + 1e-6):
-                    continue
-                used.update((i, j))
-                pts = a["_pts"] + b["_pts"]
-                dmax = max(a["_dmax"], b["_dmax"])
-                origin, a1, a2 = np.array(a["origin"]), np.array(a["a1"]), np.array(a["a2"])
-                circ = []
-                for p in pts:
-                    q = p - origin
-                    x, y = float(q @ a1), float(q @ a2)
-                    for k in range(16):
-                        ang = 2 * math.pi * k / 16
-                        circ.append((round(x + 1.5 * dmax * math.cos(ang), 5), round(y + 1.5 * dmax * math.sin(ang), 5)))
-                poly = hull(circ)
-                tp = round(gap * 1000, 1)
-                if tp < min(a["_tmin"], b["_tmin"]):
-                    rep["warnings"].append(f"Nút {node}: khe hở {tp} mm < chiều dày thanh nối nhỏ nhất")
-                area = poly_area(poly)
-                merged = {**{k: v for k, v in a.items()}, "members": sorted(set(a["members"]) | set(b["members"])),
-                          "t_mm": tp, "poly": [list(p) for p in poly], "area_m2": round(area, 5),
-                          "mass_kg": round(area * tp / 1000 * DENSITY, 2), "filler_x": True,
-                          "d_max_mm": round(dmax * 1000)}
-                node_plates.append(merged)
-        for k, pl in enumerate(node_plates):
-            if k in used:
-                continue
-            plates.append({kk: v for kk, v in pl.items() if not kk.startswith("_")})
 
-    # 3) bu lông (sau khi đẩy thanh ra khỏi bản mã)
+    # 3) nút giao chữ X: 1 bu lông + tấm đệm 45x45 dày bằng khe hở
+    for node, ms in cross_nodes.items():
+        geo = {m["id"]: member_geom(m) for m in ms}
+        nrm = unit(geo[ms[0]["id"]][4])
+        planes = sorted({round(float(np.dot(g[0], nrm)), 5) for g in geo.values()})
+        dmm = max(m["bolt"]["d_mm"] for m in ms)
+        base = np.array(node, float)
+        lo_p, hi_p = planes[0], planes[-1]
+        gap = hi_p - lo_p
+        center = base + nrm * ((lo_p + hi_p) / 2 - float(np.dot(base, nrm)))
+        tsum = sum(lib[by_id[i]["section"]]["t"] for i in {ms[0]["id"], ms[-1]["id"]})
+        extra_bolts.append({"id": ms[0]["id"], "p": center, "axis": nrm, "d_mm": dmm,
+                            "t_mm": gap * 1000 + tsum, "kind": "cross", "centered": True})
+        if gap > 1e-4:
+            a1, a2 = plane_axes(nrm)
+            h = FILLER / 2000
+            origin = base + nrm * (lo_p - float(np.dot(base, nrm)))
+            sq = [(-h, -h), (h, -h), (h, h), (-h, h)]
+            plates.append({
+                "kind": "filler", "node": list(node), "members": sorted(m["id"] for m in ms),
+                "t_mm": round(gap * 1000, 1), "on_leg": False, "origin": origin.round(5).tolist(),
+                "a1": a1.round(6).tolist(), "a2": a2.round(6).tolist(), "thick_dir": nrm.round(6).tolist(),
+                "poly": [list(p) for p in sq], "area_m2": round((FILLER / 1000) ** 2, 7),
+                "mass_kg": round((FILLER / 1000) ** 2 * gap * DENSITY, 3), "bolt_max": 1, "d_max_mm": dmm,
+                "leg_bolts": 0, "reason": "tấm đệm nút giao chữ X",
+            })
+
+    # 4) bu lông (sau khi đẩy thanh ra khỏi bản mã)
     bolts = []
     for e in ends:
         sh = np.array(end_shift.get((e["id"], e["end"]), [0, 0, 0]))
         for b in e["bolts"]:
-            bolts.append({"id": e["id"], "p": (b + sh).round(5).tolist(), "axis": e["n"].round(6).tolist(),
-                          "d_mm": round(e["d"] * 1000), "t_mm": e["t"]})
+            p = b + sh
+            bolts.append({"id": e["id"], "p": p.round(5).tolist(), "axis": unit(e["n"]).round(6).tolist(),
+                          "d_mm": e["dmm"], "t_mm": e["t"], "kind": "member",
+                          "nut": nut_dir(e["n"], p).round(6).tolist()})
+    for b in extra_bolts:
+        p = np.asarray(b["p"])
+        bolts.append({**{k: v for k, v in b.items() if k not in ("p", "axis")}, "p": p.round(5).tolist(),
+                      "axis": unit(b["axis"]).round(6).tolist(), "nut": nut_dir(b["axis"], p).round(6).tolist()})
+    gus = [p for p in plates if p["kind"] == "gusset"]
+    fil = [p for p in plates if p["kind"] == "filler"]
     rep.update({
-        "n_plates": len(plates), "n_plates_on_leg": sum(p["on_leg"] for p in plates),
-        "n_filler_x": sum(1 for p in plates if p.get("filler_x")),
-        "plate_mass_kg": round(sum(p["mass_kg"] for p in plates), 1),
-        "plates_by_t": {t: sum(1 for p in plates if p["t_mm"] == t) for t in sorted({p["t_mm"] for p in plates})},
+        "n_plates": len(gus), "n_plates_on_leg": sum(p["on_leg"] for p in gus),
+        "n_fillers": len(fil), "plate_mass_kg": round(sum(p["mass_kg"] for p in gus), 1),
+        "filler_mass_kg": round(sum(p["mass_kg"] for p in fil), 2),
+        "plates_by_t": {t: sum(1 for p in gus if p["t_mm"] == t) for t in sorted({p["t_mm"] for p in gus})},
+        "plates_by_reason": {r: sum(1 for p in gus if p["reason"] == r) for r in sorted({p["reason"] for p in gus})},
+        "n_cross_nodes": len(cross_nodes),
         "n_bolts": len(bolts),
+        "bolts_by_kind": {k: sum(1 for b in bolts if b["kind"] == k) for k in ("member", "plate_leg", "cross")},
         "bolts_by_size": {f"M{d}": sum(1 for b in bolts if b["d_mm"] == d) for d in sorted({b["d_mm"] for b in bolts})},
         "n_member_ends_shifted": len(end_shift),
     })
@@ -226,23 +290,31 @@ def build(scene_members, lib):
 
 def apply(scene: dict, lib: dict):
     plates, bolts, end_shift, rep = build(scene["members"], lib)
+    n_ch = 0
     for m in scene["members"]:
+        # Thanh giằng chéo vát góc 45° cánh không khoan lỗ (bản vẽ N122): mọi thanh không phải thanh
+        # cánh và không song song trục X/Y/Z.
+        u = unit(np.subtract(m["p2"], m["p1"]))
+        m["chamfer"] = bool(m["type"] not in LEG_TYPES and np.max(np.abs(u)) < 1 - 1e-6)
+        n_ch += m["chamfer"]
         for k in (0, 1):
             s = end_shift.get((m["id"], k))
             if s:
                 m[f"poff{k + 1}"] = [round(x, 6) for x in s]
     scene["plates"] = plates
     scene["bolts"] = bolts
+    rep["n_chamfered"] = n_ch
     return rep
 
 
 def print_report(rep):
     print("=== BU LÔNG / BẢN MÃ ===")
-    print(f"Bu lông (không tính thanh cánh): {rep['n_bolts']}  {rep['bolts_by_size']}")
-    print(f"Bản mã: {rep['n_plates']} (trên thanh cánh: {rep['n_plates_on_leg']}, "
-          f"bản đệm nút giao chữ X: {rep['n_filler_x']}), "
+    print(f"Bu lông (không tính mối nối thanh cánh): {rep['n_bolts']}  {rep['bolts_by_size']}  {rep['bolts_by_kind']}")
+    print(f"Bản mã: {rep['n_plates']} (trên thanh cánh: {rep['n_plates_on_leg']}), lý do {rep['plates_by_reason']}, "
           f"theo chiều dày {rep['plates_by_t']}, khối lượng {rep['plate_mass_kg']} kg")
+    print(f"Nút giao chữ X: {rep['n_cross_nodes']} nút, {rep['n_fillers']} tấm đệm 45x45 ({rep['filler_mass_kg']} kg)")
     print(f"Đầu thanh bị đẩy ra theo chiều dày bản mã: {rep['n_member_ends_shifted']}")
+    print(f"Thanh giằng chéo vát 45° hai đầu: {rep.get('n_chamfered', 0)}")
     for w in rep["warnings"]:
         print("CẢNH BÁO:", w)
 

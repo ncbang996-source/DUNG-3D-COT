@@ -52,10 +52,14 @@ Thư viện three.js 0.160.0 đã nằm sẵn trong `web/vendor/`, chạy đư�
 - Thanh vách ngang và xà: cánh liên kết nằm ngang, cánh còn lại chĩa xuống; riêng XAD chĩa LÊN.
   Thanh đứng của xà: cánh liên kết nằm trong mặt đứng song song trục X, chĩa về trục giữa xà.
 - Vẫn cấn: dời điểm bắt dọc thanh bị cấn 3d (làm tròn LÊN 5 mm); chỉ giữ nếu gỡ được cấn.
-- Bu lông: ít con nhất trong M16/M20/M24, bằng nhau lấy đường kính nhỏ hơn. Một hàng trên đường
-  đinh, cách đầu thanh 1,5d, khoảng cách 3d (không vẽ bu lông mối nối thanh cánh).
-- Bản mã (`src/plates.py`): ở nút có thanh (không tính thanh cánh) hơn 2 bu lông. Dày = thanh nối
-  mỏng nhất làm tròn lên 6/8/10/12/14/16 mm. Hình = bao lồi bu lông + 1,5d. Trên thanh cánh: bản mã
-  áp cánh thanh cánh, đầu thanh nối đẩy ra bằng chiều dày bản mã. Nút giao chữ X: một bản đệm lấp
-  khe hở (dày = chiều dày cánh thanh cánh).
-- Hai đầu thanh cắt vuông, chưa xử lý giao cắt tại nút, chưa có bản mã.
+- Bu lông (tham khảo bản vẽ chế tạo N122, `docs/THAM_KHAO_BVTC_N122.md`): ít con nhất trong
+  M16/M20/M24, bằng nhau lấy đường kính nhỏ hơn. Một hàng trên đường đinh. Tới đầu thanh
+  max(1,5d; G 25/30/40, thanh chính X/XĐ/XAD/XAT/XCS 35/45/50); giữa 2 bu lông max(3d; 50/60/70).
+  Đai ốc quay ra ngoài cột (thanh nằm ngang: quay xuống). Chưa vẽ bu lông mối nối thanh cánh.
+- Bản mã (`src/plates.py`): ở nút thanh cánh có >= 2 thanh mặt cột cùng mặt tiếp xúc, hoặc thanh
+  > 2 bu lông. Bắt vào thanh cánh bằng max(3; số bu lông thanh lớn nhất) bu lông trên đường đinh
+  cánh thanh cánh. Dày = thanh nối mỏng nhất làm tròn lên 6/8/10/12/14/16 mm. Hình = bao lồi
+  bu lông + 1,5d. Bản mã nằm giữa cánh thanh cánh và thanh nối; đầu thanh nối đẩy ra bằng chiều dày.
+- Nút giao chữ X: 1 bu lông xuyên 2 thanh + tấm đệm vuông 45x45 dày bằng khe hở.
+- Thanh giằng chéo (không song song trục X/Y/Z) vát 45° cánh không khoan lỗ ở hai đầu, từ t + r1.
+- Chưa làm: uốn đầu thanh vách ngang, bu lông mối nối thanh cánh, xử lý giao cắt chi tiết tại nút.
