@@ -663,7 +663,7 @@ def main(dxf, outdir):
                 z_bot = zax - gh
                 zc = z_bot + th if pm_["default_up"] else z_bot
             pm_[key] = [pm_[key][0], pm_[key][1], round(zc, 5)]
-            pm_.setdefault("contact", {})[key] = {"z": zc, "t_host": th * 1000}
+            pm_.setdefault("contact", {})[key] = {"z": zc, "t_host": th * 1000, "host_id": fh["id"]}
             rep["plan_ends_on_flange"] += 1
         pm_["length"] = round(float(np.linalg.norm(np.array(pm_["p2"]) - np.array(pm_["p1"]))), 4)
 
@@ -815,6 +815,137 @@ def main(dxf, outdir):
         keepb.append(b_)
     bolts[:] = keepb
     rep["plan_bolts_floating_removed"] = lostb
+
+    # --- Đầu thanh giằng vách tại đầu NGOÀI thanh ngang mặt cột (mặt cắt ghi "140 | 55"): tim bu lông cách
+    #     đầu thanh ngang 55 mm. Nếu thanh giằng còn chạm thép thanh khác thì tăng 60, 65... (dời bu lông + đầu
+    #     thanh giằng vào phía góc) tới khi hết chạm. Kiểm tra chạm bằng mô hình khối thép góc (2 cánh).
+    byid = {m["id"]: m for m in members}
+
+    def frame(m):
+        if m["rule"] == "leg":
+            e1, e2 = np.array(m["e1"]), np.array(m["e2"])
+        else:
+            e1, e2 = (np.array(v) for v in m["frames"]["bv"])
+        P1 = np.array(m["p1"]) + np.array(m.get("poff1", [0, 0, 0]))
+        P2 = np.array(m["p2"]) + np.array(m.get("poff2", [0, 0, 0]))
+        return P1, P2, e1, e2
+
+    def inside(m, pts, eps=0.0015):
+        P1, P2, e1, e2 = frame(m)
+        L = np.linalg.norm(P2 - P1)
+        u = (P2 - P1) / L
+        s_ = sec(m["section"])
+        b_, t_ = s_["b"] / 1000, s_["t"] / 1000
+        g1, g2 = m["g"][0] / 1000, m["g"][1] / 1000
+        out = []
+        for q in pts:
+            x = np.dot(q - P1, u)
+            if not (eps < x < L - eps):
+                out.append(False)
+                continue
+            base = P1 + u * x
+            a = np.dot(q - base, e1) + g1
+            c = np.dot(q - base, e2) + g2
+            in1 = eps < a < b_ - eps and eps < c < t_ - eps
+            in2 = eps < a < t_ - eps and eps < c < b_ - eps
+            out.append(in1 or in2)
+        return out
+
+    def end_samples(m, key, length=0.12):
+        P1, P2, e1, e2 = frame(m)
+        L = np.linalg.norm(P2 - P1)
+        u = (P2 - P1) / L
+        s_ = sec(m["section"])
+        b_, t_ = s_["b"] / 1000, s_["t"] / 1000
+        g1, g2 = m["g"][0] / 1000, m["g"][1] / 1000
+        xs = np.linspace(0, min(length, L), 13) if key == "p1" else np.linspace(L - min(length, L), L, 13)
+        pts = []
+        for x in xs:
+            base = P1 + u * x
+            for a in np.linspace(0, b_, 7):
+                for c in (0, t_):
+                    pts.append(base + e1 * (a - g1) + e2 * (c - g2))           # cánh 1
+                    pts.append(base + e1 * (c - g1) + e2 * (a - g2))           # cánh 2
+        return pts
+
+    rep["plan_brace_end_55"] = []
+    for pm_ in [m for m in members if m["rule"] == "plan" and "contact" in m]:
+        for key, c_ in pm_["contact"].items():
+            fh = byid.get(c_["host_id"])
+            if fh is None:
+                continue
+            A, B, _, _ = frame(fh)
+            Pk = np.array(pm_[key])
+            # đầu thanh ngang gần đầu thanh giằng hơn; bỏ qua nếu đó là đầu bắt vào thanh cánh (góc tam giác)
+            E, F = (A, B) if np.linalg.norm(Pk[:2] - A[:2]) < np.linalg.norm(Pk[:2] - B[:2]) else (B, A)
+            if np.linalg.norm(Pk[:2] - E[:2]) > 0.25:
+                continue
+            legs3 = [o for o in members if o["rule"] == "leg"]
+            if any(np.linalg.norm(np.cross(np.array(o["p2"]) - np.array(o["p1"]), np.array(o["p1"]) - E))
+                   / np.linalg.norm(np.array(o["p2"]) - np.array(o["p1"])) < 0.35 for o in legs3):
+                continue                                   # đầu thanh ngang tại thanh cánh (góc): không áp quy tắc 55
+            uh = (E - F) / np.linalg.norm(E - F)                                 # hướng ra đầu thanh ngang
+            # bu lông vách gần đầu thanh giằng
+            bi = min(range(len(bolts)), key=lambda i: np.linalg.norm(np.array(bolts[i]["p"])[:2] - Pk[:2])
+                     if bolts[i]["kind"] == "plan" else 9e9)
+            Bp = np.array(bolts[bi]["p"])
+            if np.linalg.norm(Bp[:2] - Pk[:2]) > 0.15:
+                continue
+            # các thanh khác gần đó để kiểm tra chạm (trừ chính thanh ngang chủ)
+            near = [o for o in members if o is not pm_ and o is not fh and o["rule"] != "plan"
+                    and min(np.linalg.norm(np.array(o["p1"]) - Pk), np.linalg.norm(np.array(o["p2"]) - Pk),
+                            np.linalg.norm(np.cross(np.array(o["p2"]) - np.array(o["p1"]), np.array(o["p1"]) - Pk))
+                            / max(np.linalg.norm(np.array(o["p2"]) - np.array(o["p1"])), 1e-9)) < 0.4]
+            orig_end, orig_b = list(pm_[key]), list(bolts[bi]["p"])
+            Dused, clash_names = None, []
+            for D in range(55, 125, 5):
+                target = E - uh * D / 1000
+                cur = np.array(orig_b)
+                dlt = uh * np.dot(target - cur, uh)                              # chỉ dời dọc thanh ngang
+                pm_[key] = (np.array(orig_end) + dlt).round(5).tolist()
+                hit = [o for o in near if any(inside(o, end_samples(pm_, key)))]
+                if not hit:
+                    Dused = D
+                    bolts[bi]["p"] = (cur + dlt).round(5).tolist()
+                    break
+                clash_names = [o["section"] for o in hit]
+            if Dused is None:
+                pm_[key] = orig_end
+                Dused = "không gỡ được"
+            pm_["length"] = round(float(np.linalg.norm(np.array(pm_["p2"]) - np.array(pm_["p1"]))), 4)
+            pm_.setdefault("end_dist_55", {})[key] = {"mm": Dused, "clash_at_55": clash_names if Dused != 55 else []}
+            # góc cánh nằm ngang của thanh ngang (đầu ngoài) còn chạm thanh khác -> vát góc (a = b, bội 5 mm)
+            if fh.get("_cut_checked_" + str(id(E))) is None:
+                kE = "p1" if np.allclose(E, A) else "p2"
+                ck = "cut1" if kE == "p1" else "cut2"
+                Pf1, Pf2, fe1, fe2 = frame(fh)
+                Lf = np.linalg.norm(Pf2 - Pf1)
+                uf = (Pf2 - Pf1) / Lf
+                sf = sec(fh["section"])
+                bf, tf = sf["b"] / 1000, sf["t"] / 1000
+                gf1, gf2 = fh["g"][0] / 1000, fh["g"][1] / 1000
+                nearh = [o for o in members if o is not fh and o["rule"] == "face" and o["type"] != "G"
+                         and np.linalg.norm(np.cross(np.array(o["p2"]) - np.array(o["p1"]), np.array(o["p1"]) - E))
+                         / np.linalg.norm(np.array(o["p2"]) - np.array(o["p1"])) < 0.3]
+                def out_flange_pts(cut):
+                    pts = []
+                    for xx in np.linspace(0, 0.12, 13):
+                        x = xx if kE == "p1" else Lf - xx
+                        for a in np.linspace(tf, bf, 7):
+                            if cut and (xx < cut / 1000 and a > bf - (cut / 1000 - xx)):
+                                continue                       # phần đã vát
+                            base = Pf1 + uf * x
+                            for c in (0, tf):
+                                pts.append(base + fe1 * (c - gf1) + fe2 * (a - gf2))
+                    return pts
+                if any(any(inside(o, out_flange_pts(0))) for o in nearh):
+                    for cut in range(20, 85, 5):
+                        if not any(any(inside(o, out_flange_pts(cut))) for o in nearh):
+                            fh[ck] = {"flange": "out", "a": cut, "b": cut,
+                                      "note": f"vát góc thừa {cut}x{cut}mm (đầu ngoài thanh ngang, tránh chạm)"}
+                            break
+            rep["plan_brace_end_55"].append({"plan": pm_["plan"], "section": pm_["section"], "D_mm": Dused,
+                                             "cham_khi_55": clash_names if Dused != 55 else []})
     for m in members:
         m["mass_kg"] = round(m["A_cm2"] * 1e-4 * m["length"] * 7850, 3)
     zs = [c for m in members for c in (m["p1"][2], m["p2"][2])]

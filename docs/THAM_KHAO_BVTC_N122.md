@@ -110,3 +110,7 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
 - Mặt cắt vách: đường tâm thanh ngang mặt cột = đường đinh CÁNH NẰM NGANG (nơi bắt thanh giằng), nằm lệch vào trong
   mặt cột một đoạn = độ sâu lưng thanh ngang - đường đinh (L60x5: 68 - 30 = 38 mm; L80x6: 68 - 40 = 28 mm).
   Đã kiểm: mọi bu lông đầu thanh giằng vách nằm trên cánh ngang của thanh ngang.
+- Đầu thanh giằng vách tại đầu NGOÀI thanh ngang (mặt cắt ghi "140 | 55"): tim bu lông cách đầu thanh ngang 55 mm;
+  nếu thanh giằng chạm thép thì tăng 60, 65... (dời bu lông + đầu thanh giằng vào phía góc) tới khi hết chạm
+  (người dùng chốt). Kết quả DT-02: 4-4 = 65, 3-3 = 70, 1-1 = 80 / 110 (chạm thanh xiên L90x7 khi để 55).
+  Góc cánh ngang thanh ngang còn chạm thì vát (DT-02: không có chỗ nào cần).
