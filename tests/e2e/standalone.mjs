@@ -1,0 +1,22 @@
+// Mở dist/NC111-32_3D.html qua file:// (giống bấm đúp) và kiểm tra app chạy.
+import { createRequire } from 'module';
+import { resolve, join } from 'path';
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+const f = resolve(new URL('../../dist/NC111-32_3D.html', import.meta.url).pathname);
+const OUT = process.argv[2] || '.';
+const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+page.on('request', (r) => { if (!r.url().startsWith('file:') && !r.url().startsWith('data:') && !r.url().startsWith('blob:')) errors.push('mạng: ' + r.url()); });
+await page.goto('file://' + f);
+await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
+console.log(await page.evaluate(() => window.__app.meshes.size + ' thanh | ' + document.getElementById('summary').innerText.replace(/\n/g, ' | ')));
+await page.evaluate(() => window.__app.select(569));
+await page.waitForTimeout(400);
+console.log(await page.evaluate(() => document.getElementById('iTable').innerText.split('\n').slice(0, 3).join(' | ')));
+await page.screenshot({ path: join(OUT, 'standalone.png') });
+console.log('ERRORS:', errors.length ? errors : 'none');
+await browser.close();

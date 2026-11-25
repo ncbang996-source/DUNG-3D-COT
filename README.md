@@ -3,6 +3,18 @@
 Đọc DXF (hình học thanh) và PDF (nhóm thanh, tiết diện), dựng mô hình 3D thép góc L theo đúng
 tiết diện, xem trên trình duyệt (three.js). Yêu cầu gốc: `docs/SPEC.md`.
 
+## Xem nhanh (không cần cài gì)
+Tải file **`dist/NC111-32_3D.html`** về máy rồi bấm đúp để mở bằng Chrome, Edge hoặc Firefox.
+File này đã chứa sẵn dữ liệu và three.js, không cần server, không cần mạng.
+Lưu ý: `web/index.html` KHÔNG mở được bằng bấm đúp, phải chạy qua server (xem bên dưới).
+
+Sau khi sửa dữ liệu hoặc code, đóng gói lại file độc lập:
+```bash
+npm install
+python3 src/run_all.py
+node tools/build_standalone.mjs
+```
+
 ## Chạy nhanh
 ```bash
 pip install -r requirements.txt          # cần thêm pdftotext (poppler-utils)

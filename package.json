@@ -1,0 +1,7 @@
+{
+  "name": "dung-3d-cot",
+  "private": true,
+  "type": "module",
+  "scripts": { "build:standalone": "node tools/build_standalone.mjs" },
+  "devDependencies": { "esbuild": "0.24.0" }
+}

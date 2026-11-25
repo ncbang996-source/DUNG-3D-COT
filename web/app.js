@@ -311,7 +311,8 @@ $('fGhost').addEventListener('change', (e) => { state.ghost = e.target.checked; 
 
 // ---------------------------------------------------------------- load
 async function load() {
-  DATA = await (await fetch('data/scene.json')).json();
+  // Bản độc lập (một file HTML) nhúng sẵn dữ liệu vào window.__SCENE__; bản thường tải qua fetch.
+  DATA = window.__SCENE__ || await (await fetch('data/scene.json')).json();
   members = DATA.members;
   sections = DATA.sections;
   byId = new Map(members.map((m) => [m.id, m]));
