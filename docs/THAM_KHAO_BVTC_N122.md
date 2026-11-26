@@ -126,8 +126,8 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
 - Nét mép thanh vẽ đứt nhiều đoạn (bị thanh khác cắt qua / bản mã che) được cộng dồn. Thanh có đường tâm liền nhưng
   nét mép ngắt tại bản mã (thanh ngang L80x6 qua bản mã giữa) = 2 thanh, mỗi thanh dừng ở bản mã.
 - Bản mã giữa mặt: hình dạng + lỗ lấy theo HÌNH CHI TIẾT (số hiệu 418: 340x420 d10, 12 lỗ), tâm chi tiết trùng tâm
-  bản mã trên mặt đứng. Dải hẹp vẽ trong bản mã (419: 80x420 d8, có ký hiệu hàn) = bản hàn VUÔNG GÓC, chĩa vào trong
-  (cùng phía cánh còn lại của các thanh TRONG; vì vậy mới phải vát cánh 4 thanh xiên). Bản mã áp lưng các thanh TRONG.
+  bản mã trên mặt đứng. Dải hẹp vẽ trong bản mã (419: 80x420 d8, có ký hiệu hàn) = bản hàn VUÔNG GÓC
+  -> người dùng chốt: chĩa RA NGOÀI, từ mặt ngoài bản mã 418. Bản mã áp lưng các thanh TRONG.
 - Vát cánh 45x45 tại bản mã giữa: góc đầu thanh sát bản hàn là góc LƯNG -> cắt tam giác 45x45 ở góc lưng cánh liên
   kết, cánh còn lại lùi 45 mm (đúng hình góc cắt vẽ trên mặt đứng).
 - Đầu thanh vẽ rõ (có nét đầu thanh vuông góc trục) thì giữ nguyên; chỉ kéo dài theo bu lông khi đầu thanh bị khuất,

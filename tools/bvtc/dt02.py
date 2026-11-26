@@ -726,12 +726,12 @@ def main(dxf, outdir):
                            else "bản vẽ DT-02 (mặt đứng)"})
             st = pl.get("strip")
             if st and st.get("L_mm"):
-                # bản hàn vuông góc: dài L dọc mặt cột (tâm = tâm bản mã), rộng w chĩa VÀO TRONG từ mặt trong bản mã
-                # (cùng phía cánh còn lại của các thanh TRONG nên phải vát cánh 45x45 các thanh xiên), dày t
+                # bản hàn vuông góc: dài L dọc mặt cột (tâm = tâm bản mã), rộng w, dày t
                 bxs = [q[1] for q in pl["pts"]]
                 ymid_ = (min(bxs) + max(bxs)) / 2
-                cen = Rk @ to3((st["x"], ymid_))[0] + n * pl["delta0"] / 1000
-                a1s, a2s = Rk @ tup, -n
+                # người dùng chốt: bản 419 chĩa RA NGOÀI, bắt đầu từ mặt ngoài bản mã 418
+                cen = Rk @ to3((st["x"], ymid_))[0] + n * (pl["delta0"] + pl["t"]) / 1000
+                a1s, a2s = Rk @ tup, n
                 o = cen - a1s * st["L_mm"] / 2000 - (Rk @ ex) * st["t"] / 2000
                 Ls, Ws = st["L_mm"] / 1000, st["w_mm"] / 1000
                 plates.append({"kind": "gusset", "node": cen.round(4).tolist(), "members": [], "t_mm": st["t"],
