@@ -244,8 +244,12 @@ def samples(m, S, step=0.01):
     s = S[m["section"]]
     b, t = s["b"] / 1000, s["t"] / 1000
     g1, g2 = m["g"][0] / 1000, m["g"][1] / 1000
-    xs = np.arange(0.002, L - 0.001, step)
-    ws = np.linspace(0.002, b - 0.002, max(3, int(b / step) + 1))
+    # dọc thanh: bước step ở thân, dày 3 mm trong 300 mm hai đầu (chỗ lấn nhỏ ở nút, góc cột hay nằm ở đầu thanh)
+    fine = min(step, 0.003)
+    e_ = min(0.3, L / 2)
+    xs = np.unique(np.concatenate([np.arange(0.002, e_, fine), np.arange(e_, L - e_, step),
+                                   np.arange(max(e_, L - e_), L - 0.001, fine)]))
+    ws = np.linspace(0.002, b - 0.002, max(3, int(b / fine) + 1))
     cs = np.array([0.0015, t / 2, t - 0.0015])
     X, W, C = np.meshgrid(xs, ws, cs, indexing="ij")
     X, W, C = X.ravel(), W.ravel(), C.ravel()

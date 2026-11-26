@@ -165,3 +165,26 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   ngay dưới = 2 đệm 10). 4 khối D ở nút này không có ký hiệu -> lấy 1 tấm 10.
 - Đề xuất (bản vẽ không ghi): 2 thanh xiên TRONG của 2 mặt kề nhau cùng ốp mặt trong thanh cánh tại một nút -> cánh
   còn lại đâm nhau ở góc cột -> vát góc mép cánh còn lại (25x70, 35x45, 50x45 mm).
+
+## Đợt góp ý cmt.docx (DT-01, lần 2) - quy tắc rút ra
+
+- Ráp DT-01 lên DT-02 (người dùng chốt: bỏ bản đế DT-01). Bản mã chờ ở đỉnh DT-02 = bản mã nối d10 750x290 (chi tiết
+  DT-02, hình cắt A-A), có 2 cặp lỗ: cặp dưới cho L90x7 DT-02, cặp trên cho L90x7 DT-01; trong góc thanh cánh có thép
+  góc nối HL130x9 dài 750 (vát góc lưng 12x12). DT-01 đọc bản mã này từ tờ DT-02, đặt theo lỗ: 10/10 lỗ trùng bu lông
+  chân DT-01 (lệch 0 mm). Khe 2 đầu thanh cánh 10 mm (110 = 50 + 10 + 50); thanh cánh DT-01 vẽ kéo tới mặt bản đế nên
+  cắt bớt 56 mm. Cao độ ráp = 9,397 m (cao độ DT-02). Mô hình ghép: `tools/bvtc/merge_segments.py`.
+- Thanh cánh DT-02 chỉ lấy nét LIỀN (nét đứt thẳng hàng phía trên là thanh cánh DT-01) -> dừng ở mối nối (z 9,443).
+- Thanh cánh cắt ngang (mặt cắt thanh nằm ngang) ở chân, mối nối, đường gãy.
+- Lỗ bản mã chi tiết phải trùng bu lông vẽ trên mặt đứng: đặt hình chi tiết rồi khớp cứng theo lỗ -> bu lông đầu thanh
+  nằm đúng đường đinh (trước lệch 15-21 mm = "lệch trục" người dùng thấy).
+- Vát 40x60 đầu dưới thanh xiên chính chỉ có ở DT-02 (ghi chú tờ DT-02); DT-01 không vát.
+- Thanh ngang 1-1 DT-01: không bẻ cục bộ; thanh thẳng nối mặt trong thanh cánh và mặt trong bản mã giữa (lệch 15 mm
+  trải đều 2070 mm, 0,42 độ) - người dùng chốt "uốn đều theo chiều dài / ép sát".
+- Kiểm tra chạm lấy mẫu dày 3 mm ở 300 mm hai đầu thanh (bước 10 mm bỏ sót chỗ lấn nhỏ ở góc cột). Vát góc mép cánh
+  còn lại ở góc cột: vừa đủ hết chạm (người dùng chốt).
+- Bu lông đứng (vách ngang) xỏ từ DƯỚI LÊN: đầu bu lông dưới, đai ốc trên; bu lông ngang từ trong ra ngoài.
+- Tấm đệm: chiều dày sửa cho vừa khe (2D.20_8 ở khe 20 -> 2 x 10). Tấm đệm sát mép cánh thanh cánh cắt phẳng theo mép.
+- Đỉnh DT-01 (đối chiếu DN-02): thanh cánh gãy 8,44 độ tại đầu trên phần nghiêng, phía trên UỐN thẳng đứng 867 mm.
+  Bản mã nét khuất = bản mã 301/302 d10 của DN-02 (DN-02 vẽ nét liền ngoài cánh thanh cánh), BẺ GÓC theo đường gãy.
+  3 bu lông M24 bắt bản mã vào phần đứng thanh cánh. Lỗ chờ (không đặt bu lông, lắp khi ráp DN-02): 4 lỗ M24 cho
+  thanh ngang/xiên DN-02, 6 lỗ M20 nối thanh cánh DN-02.

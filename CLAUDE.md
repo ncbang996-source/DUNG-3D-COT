@@ -25,6 +25,7 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
   sườn chân cột, đặc thù tờ). Thêm tờ mới = thêm mục `SHEETS` rồi chạy, xem báo cáo `report.build`.
 - `tools/bvtc/bvtc_read.py` — đọc mặt đứng 2D thành thanh (nét mép, đường tâm, nét chiều dày, nhãn tiết diện).
 - `tools/bvtc/check_dt02.py` — kiểm tra va chạm (khớp đúng hình app dựng: khung lệch, vát, bẻ cánh, bẻ lệch).
+- `tools/bvtc/merge_segments.py` — ghép đoạn trên (cấu hình `on_top_of`) lên đoạn dưới thành 1 mô hình.
 - `tools/bvtc/render_regions.py` — cắt vùng DXF ra PNG để xem bản vẽ.
 - `tools/build_standalone.mjs` — đóng gói `web/` + scene JSON thành 1 file HTML (cần `npm install` một lần).
 - `tools/shot.mjs` — chụp mô hình từ HTML theo góc camera.
@@ -38,6 +39,8 @@ python3 tools/bvtc/check_dt02.py out/dt01_scene.json clash    # thép–thép: p
 python3 tools/bvtc/check_dt02.py out/dt01_scene.json plates   # bản mã–thép: phải "bản mã chạm thép: 0"
 cp out/dt01_scene.json data/n122/dt01_scene.json
 node tools/build_standalone.mjs data/n122/dt01_scene.json dist/N122_DT-01.html
+python3 tools/bvtc/merge_segments.py out/dt02_scene.json out/dt01_scene.json data/n122/dt02_dt01_scene.json   # ghép DT-01 lên DT-02
+node tools/build_standalone.mjs data/n122/dt02_dt01_scene.json dist/N122_DT-02+DT-01.html
 node tools/shot.mjs dist/N122_DT-01.html <thư mục ảnh> '[{"tag":"tong","t":[0,0,5],"c":[9,-13,9]}]'
 python3 tools/bvtc/render_regions.py $D <thư mục ảnh> ten,x0,y0,rong,cao   # cắt bản vẽ (toạ độ DXF)
 python3 -m pytest -q
@@ -59,4 +62,5 @@ Mét; z = 0 tại đầu dưới thanh cánh (mặt trên bản đế); mặt tr
 - Thanh giằng vách: tựa trên/dưới cánh ngang thanh mặt cột; cánh ngang **bẻ cục bộ** thành nằm ngang tại chỗ bắt.
   Tim bu lông cách đầu ngoài thanh ngang 55, chạm thì tăng 5 mm/lần; góc thừa thì vát.
 - Vách giao nhau: thanh chĩa LÊN đặt trên thanh chủ, chĩa XUỐNG đặt sát mép dưới.
-- Chạm còn lại: vát góc (bội 5 mm); cái bản vẽ không ghi thì ghi "ĐỀ XUẤT" và báo người dùng.
+- DT-01 đặt trên DT-02 (không bản đế); đỉnh DT-01 thanh cánh uốn thẳng đứng, bản mã DN-02 bẻ góc; bu lông đứng xỏ từ dưới lên.
+- Chạm còn lại: vát góc (bội 5 mm, vừa đủ); cái bản vẽ không ghi thì ghi "ĐỀ XUẤT" và báo người dùng.
