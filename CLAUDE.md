@@ -30,7 +30,7 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
 ## Lệnh
 ```bash
 D=data/n122/BVTC_COT_N122-3230.dxf
-python3 tools/bvtc/dt02.py $D out DT-01          # hoặc DT-02 (~40 s); ra out/dt01_scene.json, out/dt01_check.json
+python3 tools/bvtc/dt02.py $D out DT-01          # hoặc DT-02 (~8-10 s; DXF đã phân tích lưu ở out/.cache)
 python3 tools/bvtc/check_dt02.py out/dt01_scene.json clash    # thép–thép: phải "cặp chạm: 0"
 python3 tools/bvtc/check_dt02.py out/dt01_scene.json plates   # bản mã–thép: phải "bản mã chạm thép: 0"
 cp out/dt01_scene.json data/n122/dt01_scene.json

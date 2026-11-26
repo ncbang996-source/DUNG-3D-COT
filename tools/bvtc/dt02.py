@@ -275,6 +275,29 @@ def fit_detail(P, E, f, holes=None, bolts=None):
     return err, T, {"xoay_do": round(math.degrees(th) % 360, 1), "lat_guong": mir < 0}
 
 
+def read_dxf_cached(path):
+    """Đọc DXF; lưu bản đã phân tích (pickle) cạnh thư mục out/.cache theo kích thước + thời điểm sửa file,
+    lần sau nạp lại nhanh hơn ~4 lần. Xoá out/.cache nếu nghi bộ nhớ đệm hỏng."""
+    import hashlib
+    import pickle
+    st = Path(path).stat()
+    key = hashlib.sha1(f"{Path(path).resolve()}|{st.st_size}|{st.st_mtime_ns}|{ezdxf.__version__}".encode()).hexdigest()[:16]
+    cdir = ROOT / "out" / ".cache"
+    cfile = cdir / f"dxf_{key}.pkl"
+    if cfile.exists():
+        try:
+            return pickle.loads(cfile.read_bytes())
+        except Exception:
+            pass
+    doc = ezdxf.readfile(path)
+    try:
+        cdir.mkdir(parents=True, exist_ok=True)
+        cfile.write_bytes(pickle.dumps(doc))
+    except Exception:
+        pass
+    return doc
+
+
 # ---------------------------------------------------------------- mặt đứng
 def read_elevation(doc, msp):
     ms = R.members(doc, msp, BOX)
@@ -332,7 +355,7 @@ def read_elevation(doc, msp):
 
 
 def main(dxf, outdir):
-    doc = ezdxf.readfile(dxf)
+    doc = read_dxf_cached(dxf)
     msp = doc.modelspace()
     rep = {"warnings": []}
     ms, segs, braces, legs, wps = read_elevation(doc, msp)
@@ -1498,12 +1521,18 @@ def main(dxf, outdir):
               if e.dxf.name in ("1", "2", "3") and inb(e.dxf.insert) and zf(e.dxf.insert[1]) < BASE_ZONE]
         tz = tup[2]
 
+        BB = np.array(bb, float).reshape(-1, 2)
+        U1, V1 = np.array(RIB1_H, float).T
+        U3, V3 = np.array(RIB3_H, float).T
+
         def cost(H, dz):
-            c = 0.0
-            for holes, xf in ((RIB1_H, lambda u: -(H + 200) + u), (RIB3_H, lambda u: H - u)):
-                for u, v in holes:
-                    c += min(math.hypot(bx - xf(u), bz - (v * tz + dz)) for bx, bz in bb) if bb else 0
-            return c
+            # tổng khoảng cách từ mỗi lỗ sườn tới bu lông mặt đứng gần nhất (tính mảng)
+            if not len(BB):
+                return 0.0
+            hx = np.concatenate([-(H + 200) + U1, H - U3])
+            hz = np.concatenate([V1, V3]) * tz + dz
+            d = np.hypot(hx[:, None] - BB[None, :, 0], hz[:, None] - BB[None, :, 1])
+            return float(d.min(axis=1).sum())
         h0 = halfw(y0)
         HEEL, DZ = min(((H, dz) for H in np.arange(h0 - 20, h0 + 120, 0.5) for dz in np.arange(-20, 31, 1.0)),
                        key=lambda z_: cost(*z_))

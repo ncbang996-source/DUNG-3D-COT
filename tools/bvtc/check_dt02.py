@@ -209,30 +209,66 @@ def where_v(m, S, Q, eps=0.0015):
     return out
 
 
+def cut_mask(m, x, L, fl, w, b):
+    """Bản véc-tơ của cut_removed: x, w là mảng cùng kích thước."""
+    r = np.zeros(np.broadcast(x, w).shape, bool)
+    for key, x0 in (("cut1", x), ("cut2", L - x)):
+        c = m.get(key)
+        if not c:
+            continue
+        bb, aa = c["b"] / 1000, c["a"] / 1000
+        near = x0 < bb
+        f = aa * (1 - x0 / bb)
+        if c["flange"] == fl:
+            r |= near & (w > b - f)
+        if c["flange"] == "heel":
+            r |= near & ((fl == "out") | (w < f))
+    return r
+
+
+_SAMPLE_CACHE = {}
+_GEOM_KEYS = ("p1", "p2", "poff1", "poff2", "e1", "e2", "frames", "g", "section", "cut1", "cut2", "bends", "prof",
+              "prof_n", "rule")
+
+
 def samples(m, S, step=0.01):
-    """Điểm mẫu trên 2 cánh (mặt ngoài + giữa chiều dày), bỏ phần vát."""
+    """Điểm mẫu trên 2 cánh (mặt ngoài + giữa chiều dày), bỏ phần vát; có bẻ cánh, bẻ lệch.
+    Tính bằng mảng numpy và nhớ theo hình học thanh (gọi lại khi thanh không đổi thì lấy ngay)."""
+    key = (json.dumps({k: m.get(k) for k in _GEOM_KEYS}, sort_keys=True, default=str), step)
+    hit = _SAMPLE_CACHE.get(key)
+    if hit is not None:
+        return hit
     P1, P2, e1, e2 = frame(m)
     L = np.linalg.norm(P2 - P1)
     u = (P2 - P1) / L
     s = S[m["section"]]
     b, t = s["b"] / 1000, s["t"] / 1000
     g1, g2 = m["g"][0] / 1000, m["g"][1] / 1000
-    pts = []
-    for x in np.arange(0.002, L - 0.001, step):
-        base = P1 + u * x
-        if m.get("prof"):
-            base = base + np.array(m["prof_n"]) * float(prof_extra(m, x * 1000, L * 1000)[0]) / 1000
-        for w in np.linspace(0.002, b - 0.002, max(3, int(b / step) + 1)):
-            for c in (0.0015, t / 2, t - 0.0015):
-                if not cut_removed(m, x, L, "conn", w, b):
-                    pts.append(base + e1 * (w - g1) + e2 * (c - g2))
-                if not cut_removed(m, x, L, "out", w, b):
-                    th = float(bend_theta(m, x * 1000)[0]) if m.get("bends") else 0.0
-                    v = e1 * c + e2 * w
-                    if th:
-                        v = v * np.cos(th) + np.cross(u, v) * np.sin(th) + u * np.dot(u, v) * (1 - np.cos(th))
-                    pts.append(base - e1 * g1 - e2 * g2 + v)
-    return np.array(pts)
+    xs = np.arange(0.002, L - 0.001, step)
+    ws = np.linspace(0.002, b - 0.002, max(3, int(b / step) + 1))
+    cs = np.array([0.0015, t / 2, t - 0.0015])
+    X, W, C = np.meshgrid(xs, ws, cs, indexing="ij")
+    X, W, C = X.ravel(), W.ravel(), C.ravel()
+    base = P1[None, :] + np.outer(X, u)
+    if m.get("prof"):
+        base = base + np.outer(prof_extra(m, X * 1000, L * 1000) / 1000, np.array(m["prof_n"]))
+    H = base - e1 * g1 - e2 * g2
+    # cánh liên kết
+    keep1 = ~cut_mask(m, X, L, "conn", W, b)
+    P_conn = (H + np.outer(W, e1) + np.outer(C, e2))[keep1]
+    # cánh còn lại (có thể bẻ quanh mép lưng)
+    keep2 = ~cut_mask(m, X, L, "out", W, b)
+    V = np.outer(C, e1) + np.outer(W, e2)
+    if m.get("bends"):
+        th = bend_theta(m, X * 1000)
+        co, si = np.cos(th)[:, None], np.sin(th)[:, None]
+        V = V * co + np.cross(u, V) * si + np.outer(V @ u, u) * (1 - co)
+    P_out = (H + V)[keep2]
+    res = np.concatenate([P_conn, P_out]) if len(P_conn) + len(P_out) else np.zeros((0, 3))
+    if len(_SAMPLE_CACHE) > 5000:
+        _SAMPLE_CACHE.clear()
+    _SAMPLE_CACHE[key] = res
+    return res
 
 
 def seg_dist(a1, a2, b1, b2):
