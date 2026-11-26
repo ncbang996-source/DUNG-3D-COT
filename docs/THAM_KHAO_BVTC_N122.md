@@ -146,3 +146,22 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   ĐỀ XUẤT (bản vẽ không ghi): 2 thanh L70x6 hai mặt kề nhau bắt vào thanh cánh cùng cao độ 2-2, cánh còn lại đâm nhau
   ở góc cột -> vát góc mép cánh còn lại 45x70 mm.
 - Kiểm tra tự động (tools/bvtc/check_dt02.py): thép-thép, bản mã-thép, bu lông xuyên dọc cánh = 0.
+
+## Đoạn thân DT-01 (dựng cùng chương trình: `python3 tools/bvtc/dt02.py <dxf> out DT-01`)
+
+- Cấu hình tờ trong `SHEETS` (khung mặt đứng, mặt cắt 1-1, sườn chân cột đọc từ chi tiết 1/10: 515x420 (10 lỗ),
+  250x420, 315x420 (10 lỗ); bản đế 450x450x40). Vị trí lưng thanh cánh ở chân cột tìm bằng cách khớp lỗ sườn với bu
+  lông chân cột trên mặt đứng (lệch TB 2,4 mm; bu lông mặt đứng cao hơn lỗ sườn 14 mm khi đặt đáy sườn trên bản đế).
+- Bản mã nút: lấy hình chi tiết theo số hiệu (311, 312, 313, 314), đặt khớp đường bao + lỗ (xoay/lật gương).
+  Nét bản mã vẽ rời (bị thanh che) được ghép thành đường bao kín.
+- Người dùng xác nhận:
+  - (A) "trục uốn" mặt cắt 1-1: 2 nửa thanh ngang L65x5 bẻ lệch 15 mm (đoạn 300 mm đầu thanh ốp mặt trong thanh cánh)
+    để đoạn giữa áp vừa mặt trong bản mã giữa 312.
+  - (B) nút giữa: thanh xiên ngoài - bản mã 312 - thanh xiên trong; 2 nửa thanh ngang sau bản mã, không chạm thanh xiên trong.
+    Thanh xiên trong/ngoài ép sát bản mã tại nút giữa (thêm 1 điểm độ sâu giữa thanh).
+  - (C) thanh xiên TRONG có bu lông qua cánh thanh cánh -> ốp mặt trong thanh cánh; tấm đệm (khối "D" = vòng nét đứt,
+    Ø44-48) tại bu lông ngoài mép thanh cánh: 1 tấm 10 mm/bu lông (khe 12, ép 2). Giao chữ X: "2D" = 2 tấm chồng nhau.
+- Nút đầu trên: bản mã vẽ nét khuất (nối đoạn trên) dựng như bản mã nút thanh cánh, dày 10 SUY LUẬN (khe giao chữ X
+  ngay dưới = 2 đệm 10). 4 khối D ở nút này không có ký hiệu -> lấy 1 tấm 10.
+- Đề xuất (bản vẽ không ghi): 2 thanh xiên TRONG của 2 mặt kề nhau cùng ốp mặt trong thanh cánh tại một nút -> cánh
+  còn lại đâm nhau ở góc cột -> vát góc mép cánh còn lại (25x70, 35x45, 50x45 mm).

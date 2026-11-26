@@ -138,7 +138,22 @@ function buildCutGeometry(m) {
   const p2 = new THREE.Vector3(...(m.p2d || m.p2)).add(off).add(new THREE.Vector3(...(m.poff2 || [0, 0, 0])));
   const L = p1.distanceTo(p2) * 1000;
   const u = p2.clone().sub(p1).normalize();
-  const P = (x, a, b) => p1.clone().lerp(p2, x / L).addScaledVector(e1, (a - g1) / 1000).addScaledVector(e2, (b - g2) / 1000);
+  // thanh bẻ lệch / ép sát giữa thanh: độ sâu theo chiều dài (prof), cộng phần lệch so với nối thẳng 2 đầu
+  const prof = m.prof, pn = m.prof_n ? new THREE.Vector3(...m.prof_n) : null;
+  const extra = (x) => {
+    if (!prof) return 0;
+    let d = prof[prof.length - 1][1];
+    for (let i = 0; i < prof.length - 1; i++) {
+      const [xa, da] = prof[i], [xb, db] = prof[i + 1];
+      if (x <= xb) { d = xb > xa ? da + (db - da) * (x - xa) / (xb - xa) : db; break; }
+    }
+    const d0 = prof[0][1], d1 = prof[prof.length - 1][1];
+    return d - (d0 + (d1 - d0) * x / L);
+  };
+  const P = (x, a, b) => {
+    const v = p1.clone().lerp(p2, x / L).addScaledVector(e1, (a - g1) / 1000).addScaledVector(e2, (b - g2) / 1000);
+    return pn ? v.addScaledVector(pn, extra(x) / 1000) : v;
+  };
   const pos = [];
   const push = (...vs) => vs.forEach((v) => pos.push(v.x, v.y, v.z));
   for (const fl of ['conn', 'out']) {
@@ -165,6 +180,7 @@ function buildCutGeometry(m) {
     };
     // cắt đa giác thành các dải theo trạm x (đầu/cuối đoạn chuyển tiếp) để mặt bẻ đi đúng hình
     const stations = [...new Set(bends.flatMap((b) => [b.x0 - b.ramp, b.x0, b.x1, b.x1 + b.ramp])
+      .concat(prof ? prof.map((q) => q[0]) : [])
       .filter((x) => x > 0 && x < L))].sort((a, b) => a - b);
     const cuts = [0, ...stations, L];
     for (let k = 0; k < cuts.length - 1; k++) {
@@ -183,7 +199,7 @@ function buildCutGeometry(m) {
 }
 
 function buildGeometry(m) {
-  if (m.cut1 || m.cut2 || (m.bends && m.bends.length)) return buildCutGeometry(m);
+  if (m.cut1 || m.cut2 || (m.bends && m.bends.length) || m.prof) return buildCutGeometry(m);
   const s = sections[m.section];
   const chamfer = !!(m.chamfer1 || m.chamfer2);
   // thanh vát: phần cánh không khoan lỗ cao hơn h0 = t + r1 dựng riêng (hình thang), profile cắt tại h0

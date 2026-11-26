@@ -63,6 +63,10 @@ SHEETS = {
         "box": (-2357, -121515, -2133, -121060),
         "plans": {"1-1": (-121420.53, (-2020, -121345, -1828, -121170))},
         "level_cut": {"1-1": 25},
+        # mặt cắt 1-1 ghi "trục uốn" cách góc 300, lệch 15: 2 nửa thanh ngang mặt cột bẻ lệch ra ngoài 15 mm để áp vừa
+        # mặt trong bản mã giữa 312 (người dùng xác nhận); thứ tự: thanh xiên ngoài - bản mã - thanh xiên trong
+        "center_joggle": {"offset": 15.0, "from_leg": 300.0, "ramp": 45.0},
+        "hidden_inner_plates": {"t": 10, "note": "vẽ nét khuất, dày 10 suy luận: khe giao chữ X ngay dưới = 2 đệm 10"},
         "base": {
             "rib1": [(0, 100), (0, 0), (515, 0), (515, 220), (435, 420), (200, 420)],
             "rib2": [(0, 100), (0, 0), (158, 0), (192, 30), (250, 420), (200, 420)],
@@ -140,10 +144,10 @@ def sec(name):
     return LIB[name]
 
 
-def banma_loops(msp, tol=0.05):
+def banma_loops(msp, tol=0.05, ents=None):
     """Đường bao bản mã (lớp Banma): polyline kín giữ nguyên; các polyline hở nối đầu-cuối thành vòng kín."""
     closed, opens, pending = [], [], []
-    for e in msp.query('LWPOLYLINE[layer=="Banma"]'):
+    for e in (ents if ents is not None else msp.query('LWPOLYLINE[layer=="Banma"]')):
         pts = [(q[0], q[1]) for q in e.get_points()]
         if len(pts) < 2:
             continue
@@ -394,6 +398,28 @@ def main(dxf, outdir):
         t_mm = near[0][0] if near and math.dist(near[0][1], c) < 45 else 8
         plates2d.append({"pts": pts, "pts0": pts, "t": t_mm, "nodes": inside_nodes})
 
+    # --- bản mã vẽ NÉT KHUẤT (lớp COT) tại nút thanh cánh đầu trên DT-01 (nối đoạn trên): dựng như bản mã nút
+    #     thanh cánh (áp mặt ngoài cánh). Dày không ghi: suy từ tấm đệm (khe giao chữ X = 2 x 10; đệm D ở thanh
+    #     trong khớp với bản mã ngoài), xem CFG.
+    hip = CFG.get("hidden_inner_plates")
+    if hip:
+        ents = [e for e in msp.query('LWPOLYLINE[layer=="COT"]') if R.linetype(doc, e) == "H"
+                and all(inb((q[0], q[1])) for q in e.get_points())]
+        for pts in banma_loops(msp, ents=ents):
+            xs_, ys_ = [q[0] for q in pts], [q[1] for q in pts]
+            if (max(xs_) - min(xs_)) * SC < 150 or (max(ys_) - min(ys_)) * SC < 150:
+                continue
+            if not any(dist_line(q, L_["w1"], L_["w2"]) < 6 for q in pts for L_ in legs):
+                continue
+            if min(ys_) < min(Lg["a"][1], Lg["b"][1]) + BASE_ZONE / SC:
+                continue                          # sườn chân cột vẽ nét khuất: đã dựng theo chi tiết sườn
+            inside_nodes = [n for n in nodes if point_in_poly(n, pts)]
+            cxy_ = (sum(xs_) / len(xs_), sum(ys_) / len(ys_))
+            plates2d.append({"pts": pts, "pts0": pts, "t": hip["t"], "nodes": inside_nodes or [cxy_],
+                             "hidden": True, "note": hip.get("note", "")})
+            rep.setdefault("inner_plates", []).append({"size_mm": [round((max(xs_) - min(xs_)) * SC),
+                                                                   round((max(ys_) - min(ys_)) * SC)], "t": hip["t"]})
+
     # --- bản vẽ đứng thấy cạnh (dải hẹp < 1 đơn vị nằm trong bản mã khác) = bản hàn VUÔNG GÓC mặt bản mã
     bbox = lambda P: (min(q[0] for q in P), min(q[1] for q in P), max(q[0] for q in P), max(q[1] for q in P))
     for pl in list(plates2d):
@@ -552,6 +578,8 @@ def main(dxf, outdir):
         on_leg_ = any(dist_line(n, L_["w1"], L_["w2"]) < 3.0 for n in pl["nodes"] for L_ in legs)
         pl["delta0"] = gl if on_leg_ else None
         pl["on_leg_fixed"] = on_leg_
+        if pl.get("hidden"):
+            pl["delta0"], pl["on_leg_fixed"] = gl, True       # như bản mã nút thanh cánh: áp mặt ngoài cánh
     pt_k = lambda m, k: m["c1"] if k == 0 else m["c2"]
 
     def delta_at(h, p):
@@ -571,6 +599,35 @@ def main(dxf, outdir):
                 if m["plate"][k] is pl and not m["out"] and m["delta"][1 - k] is not None and m["plate"][1 - k] is not pl:
                     ds.append(m["delta"][1 - k])
         return min(ds) if ds else None
+
+    # bu lông vẽ (vị trí) để biết đầu thanh có bắt qua cánh thanh cánh không
+    bpos_d = [((e.dxf.insert[0], e.dxf.insert[1]), {"1": 16, "2": 20, "3": 24}[e.dxf.name]) for e in msp.query("INSERT")
+              if e.dxf.name in ("1", "2", "3") and inb(e.dxf.insert)]
+    bpos = [q for q, _ in bpos_d]
+
+    def on_leg_fp(q):
+        for L_ in legs:
+            ylo, yhi = sorted((L_["a"][1], L_["b"][1]))
+            if ylo <= q[1] <= yhi:
+                sgn = 1 if L_ is Lg else -1
+                off = (q[0] - xline(L_, q[1])) * SC * sgn
+                if -L_["g"] + 5 <= off <= sec(L_["section"])["b"] - L_["g"] - 5:
+                    return True
+        return False
+
+    def bolt_on_leg_at_end(m, k):
+        """Đầu k của thanh có bu lông (trên đường đinh thanh) xuyên qua cánh thanh cánh."""
+        c1, c2 = m["c1"], m["c2"]
+        L = math.dist(c1, c2)
+        u_ = ((c2[0] - c1[0]) / L, (c2[1] - c1[1]) / L)
+        for q in bpos:
+            sq = (q[0] - c1[0]) * u_[0] + (q[1] - c1[1]) * u_[1]
+            o = ((q[0] - c1[0]) * m["nvec"][0] + (q[1] - c1[1]) * m["nvec"][1]) * SC
+            if abs(o) > 8 or not (-0.4 <= sq <= L + 0.4):
+                continue
+            if (sq < L / 2) == (k == 0) and on_leg_fp(q):
+                return True
+        return False
 
     # lan truyền độ sâu: lặp tới khi ổn định; đầu bắt vào thanh giằng lấy độ sâu thanh chủ ĐÚNG TẠI điểm bắt
     rep["depth_iterations"] = 0
@@ -596,6 +653,14 @@ def main(dxf, outdir):
                 if in_base:
                     # chân cột: đầu thanh ép sát sườn d12 (sườn nằm ngoài lưng cánh thanh cánh, mặt trong δ = g)
                     lo, hi = gl, gl + 12
+                elif pl is not None and pl.get("inner"):
+                    # bản mã nằm sau cánh thanh cánh: thanh TRONG áp mặt trong bản mã, thanh NGOÀI áp mặt ngoài cánh
+                    lo, hi = (pl["delta0"], pl["delta0"] + pl["t"]) if not m["out"] else (gl - tl, gl)
+                elif pl is not None and pl["delta0"] is not None and pl.get("on_leg_fixed") and not m["out"] \
+                        and bolt_on_leg_at_end(m, k):
+                    # thanh TRONG có bu lông bắt qua cánh thanh cánh: ốp mặt trong thanh cánh; phần ngoài mép thanh
+                    # cánh cách bản mã = dày cánh thanh cánh -> chèn tấm đệm (ký hiệu D)
+                    lo, hi = gl - tl, gl
                 elif pl is not None and pl["delta0"] is not None:
                     lo, hi = pl["delta0"], pl["delta0"] + pl["t"]
                 elif kind == "leg":
@@ -623,6 +688,50 @@ def main(dxf, outdir):
     for pl in plates2d:
         if pl["delta0"] is None:
             pl["delta0"] = gl
+
+    # --- nút giữa có thanh ngang bẻ lệch (DT-01): bản mã giữa áp lưng thanh ngang đã bẻ; thanh xiên trong ép sát
+    #     mặt trong bản mã, thanh xiên ngoài ép sát mặt ngoài bản mã (thêm 1 điểm độ sâu giữa thanh)
+    cj = CFG.get("center_joggle")
+    rep["center_joggle"] = []
+    for pl in [p_ for p_ in plates2d if not p_.get("on_leg_fixed")] if cj else []:
+        halves = [m for m in keep if (m["ang"] % 180 < 3 or m["ang"] % 180 > 177) and pl in m["plate"]]
+        if not halves:
+            continue
+        leg_d = min(m["delta"][1 - m["plate"].index(pl)] for m in halves)
+        d_in = leg_d + cj["offset"]
+        pl["delta0"] = d_in
+        cen = pl["nodes"][0]
+        for m in halves:
+            kp = m["plate"].index(pl)
+            m["delta"][kp] = d_in
+            c1, c2 = m["c1"], m["c2"]
+            L = math.dist(c1, c2)
+            s_leg = 0.0 if kp == 1 else L * SC                    # đầu thanh cánh (mm theo trục từ c1)
+            sgn = 1 if kp == 1 else -1
+            s_k = s_leg + sgn * cj["from_leg"]
+            m["dprof"] = sorted([(s_k, leg_d), (s_k + sgn * cj["ramp"], d_in)])
+            rep["center_joggle"].append({"section": m["section"], "leg_mm": leg_d, "giua_mm": d_in,
+                                         "truc_uon_cach_tim_thanh_canh_mm": cj["from_leg"]})
+        for m in keep:
+            if m in halves or pl in m["plate"]:
+                continue
+            d_, t = dist_seg(cen, m["c1"], m["c2"])
+            if d_ < 1.0 and 0.05 < t < 0.95:
+                sc_ = t * math.dist(m["c1"], m["c2"]) * SC
+                m["dprof"] = [(sc_, d_in + pl["t"] if m["out"] else d_in)]
+                rep["center_joggle"].append({"section": m["section"], "side": "NGOAI" if m["out"] else "TRONG",
+                                             "ep_sat_ban_ma_mm": m["dprof"][0][1]})
+
+    def delta_s(m, smm):
+        """Độ sâu lưng thanh tại vị trí smm (mm dọc trục từ c1): nội suy theo 2 đầu thanh thật + điểm bẻ."""
+        c1, c2 = m["c1"], m["c2"]
+        L = math.dist(c1, c2)
+        u_ = ((c2[0] - c1[0]) / L, (c2[1] - c1[1]) / L)
+        s1_ = ((m["b1"][0] - c1[0]) * u_[0] + (m["b1"][1] - c1[1]) * u_[1]) * SC
+        s2_ = ((m["b2"][0] - c1[0]) * u_[0] + (m["b2"][1] - c1[1]) * u_[1]) * SC
+        pts_ = sorted([(s1_, m["delta"][0]), (s2_, m["delta"][1])] + list(m.get("dprof", [])))
+        xs_, ds_ = [p_[0] for p_ in pts_], [p_[1] for p_ in pts_]
+        return float(np.interp(smm, xs_, ds_))
 
     # --- vát cánh theo ghi chú bản vẽ (mặt đứng: 40x60 đầu dưới thanh xiên chính bắt sườn chân cột;
     #     45x45 đầu 4 thanh xiên tại bản mã giữa). Vát trên cánh liên kết (thấy trên mặt đứng).
@@ -739,8 +848,24 @@ def main(dxf, outdir):
         # bu lông của thanh: nằm trên đường đinh (đường tâm) của thanh (lệch <= 8 mm) và trong cánh; bu lông nối
         # thanh cánh nằm trong vùng đầu thanh nhưng không trên đường đinh thanh giằng -> không tính
         offs_ = m.get("centers_rel") or [0.0]
-        on = [(sof(b["p"]), b["d"]) for b in bolts2d if in_flange(m, b["p"]) and
-              min(abs(((b["p"][0] - c1[0]) * m["nvec"][0] + (b["p"][1] - c1[1]) * m["nvec"][1]) * SC - o_)
+
+        def crossing_bolt_at_end(q):
+            # bu lông tại đầu thanh (nút) mà thanh khác chạy QUA -> bu lông giao chữ X, không thuộc thanh này
+            # (bu lông giao của >= 2 thanh khác cùng chạy qua; nút chỉ 1 thanh chạy qua thì bu lông vẫn của thanh này)
+            if min(math.dist(q, c1), math.dist(q, c2)) > 1.0:
+                return False
+            n_ = 0
+            for o in keep:
+                if o is m:
+                    continue
+                d_, t_ = dist_seg(q, o["c1"], o["c2"])
+                if d_ * SC < 8 and 0.05 < t_ < 0.95:
+                    n_ += 1
+            return n_ >= 2
+        # vị trí bu lông vẽ trên mặt đứng (lỗ theo chi tiết bản mã có thể lệch vài mm so với đường đinh)
+        bl_ = [(b["p"], b["d"]) for b in bolts2d] + bpos_d
+        on = [(sof(bp_), bd_) for bp_, bd_ in bl_ if in_flange(m, bp_) and not crossing_bolt_at_end(bp_) and
+              min(abs(((bp_[0] - c1[0]) * m["nvec"][0] + (bp_[1] - c1[1]) * m["nvec"][1]) * SC - o_)
                   for o_ in offs_) <= 8]
         s1, s2 = sof(m["b1"]), sof(m["b2"])
         lo_side = [x for x in on if x[0] < (s1 + s2) / 2]
@@ -785,10 +910,7 @@ def main(dxf, outdir):
             if not (min(hs, toe) + 5 <= o <= max(hs, toe) - 5):
                 continue
             # độ sâu nội suy theo 2 đầu thanh THẬT (b1 <-> δ đầu 1, b2 <-> δ đầu 2), giống hình 3D
-            s1_ = (m["b1"][0] - c1[0]) * u_[0] + (m["b1"][1] - c1[1]) * u_[1]
-            s2_ = (m["b2"][0] - c1[0]) * u_[0] + (m["b2"][1] - c1[1]) * u_[1]
-            t = max(0.0, min(1.0, (sq - s1_) / (s2_ - s1_)))
-            d_ = m["delta"][0] + (m["delta"][1] - m["delta"][0]) * t
+            d_ = delta_s(m, sq * SC)
             rng = (d_, d_ + m["t_mm"]) if m["out"] else (d_ - m["t_mm"], d_)
             lay.append((rng[0], rng[1], m["section"] + (" NGOAI" if m["out"] else " TRONG")))
         for pl in plates2d:
@@ -808,6 +930,34 @@ def main(dxf, outdir):
             lay += [(gl - tl - 9, gl - tl, "HL130X9 nối trong"), (gl, gl + 10, "bản nối ngoài d10")]
         return lay
 
+    # --- tấm đệm (khối "D" = vòng nét đứt quanh bu lông; ký hiệu "nD.F_T" = n tấm, bu lông F, dày T):
+    #     số tấm mỗi vị trí = n / số khối D cùng ký hiệu (nút thanh cánh: 2 vị trí x 1 tấm; giao chữ X: 1 vị trí
+    #     x 2 tấm chồng nhau - người dùng xác nhận). Tấm đệm đặt áp lớp thép phía ngoài của khe.
+    dlabs = []
+    for t_ in msp.query("TEXT"):
+        mt = re.fullmatch(r"(\d*)D\.(\d+)_(\d+)", t_.dxf.text.strip())
+        if mt and inb(t_.dxf.insert):
+            dlabs.append({"n": int(mt.group(1) or 1), "d": int(mt.group(2)), "t": float(mt.group(3)),
+                          "p": (t_.dxf.insert[0], t_.dxf.insert[1]), "syms": []})
+    dsyms = []
+    for e in msp.query('INSERT[name=="D"]'):
+        if inb(e.dxf.insert):
+            r_ = next((c.dxf.radius for c in doc.blocks.get("D") if c.dxftype() == "CIRCLE"), 0.88) * e.dxf.xscale
+            sym = {"p": (e.dxf.insert[0], e.dxf.insert[1]), "r_mm": r_ * SC}
+            if dlabs:
+                lab = min(dlabs, key=lambda L_: math.dist(L_["p"], sym["p"]))
+                if math.dist(lab["p"], sym["p"]) < 25:
+                    lab["syms"].append(sym)
+                    sym["lab"] = lab
+            dsyms.append(sym)
+    # khối D không có ký hiệu số lượng/chiều dày gần đó: lấy 1 tấm dày 10 (như nút thanh cánh) - báo lại
+    for sym in dsyms:
+        if "lab" not in sym:
+            sym["lab"] = {"n": 1, "d": 20, "t": float(CFG.get("filler_default_t", 10)), "p": sym["p"],
+                          "syms": [sym], "assumed": True}
+    fillers2d = []
+    rep["fillers"] = []
+
     rep["bolt_gaps"] = []
     rep["bolts_dropped"] = 0
     keepb2 = []
@@ -818,6 +968,34 @@ def main(dxf, outdir):
             rep.setdefault("bolts_dropped_pts", []).append(bb["p"])
             continue
         lay.sort()
+        # khối D đặt đúng tim bu lông vẽ; bu lông lấy theo hình chi tiết bản mã có thể lệch vài mm
+        sym = next((sy for sy in dsyms if "lab" in sy and math.dist(sy["p"], bb["p"]) < 1.2 and
+                    min(bolts2d, key=lambda b2: math.dist(b2["p"], sy["p"])) is bb), None)
+        if sym:
+            lab = sym["lab"]
+            nper = max(1, round(lab["n"] / len(lab["syms"])))
+            # khe lớn nhất giữa các lớp
+            gaps = []
+            cur = lay[0][1]
+            for a_, b_, n_ in lay[1:]:
+                if a_ > cur + 0.5:
+                    gaps.append((a_ - cur, cur, a_))
+                cur = max(cur, b_)
+            if gaps:
+                g_, glo, ghi = max(gaps)
+                th = nper * lab["t"]
+                for i in range(nper):
+                    f_hi = ghi - i * lab["t"]
+                    lay.append((f_hi - lab["t"], f_hi, "tấm đệm d%d" % lab["t"]))
+                    fillers2d.append({"p": bb["p"], "lo": f_hi - lab["t"], "t": lab["t"], "r": sym["r_mm"]})
+                lay.sort()
+                rep["fillers"].append({"z_mm": round(zf(bb["p"][1])), "x_mm": round((bb["p"][0] - xc) * SC),
+                                       "khe_mm": round(g_, 1), "dem": f"{nper} x {lab['t']:g}",
+                                       "con_ep_mm": round(g_ - th, 1),
+                                       **({"gia_dinh": "không có ký hiệu, lấy 1 x 10"} if lab.get("assumed") else {})})
+            else:
+                rep["fillers"].append({"z_mm": round(zf(bb["p"][1])), "x_mm": round((bb["p"][0] - xc) * SC),
+                                       "khe_mm": 0, "loi": "không có khe để đặt tấm đệm"})
         lo, hi = lay[0][0], max(x[1] for x in lay)
         cur = lay[0][1]
         for a_, b_, n_ in lay[1:]:
@@ -830,6 +1008,18 @@ def main(dxf, outdir):
                    "L_from": "ký hiệu bản vẽ" if L_b else "tính (không thấy ký hiệu)"})
         keepb2.append(bb)
     bolts2d[:] = keepb2
+
+    def prof3d(m, nn):
+        """Độ sâu theo chiều dài (thanh bẻ lệch / ép sát giữa thanh): [[x mm từ p1, δ mm], ...]."""
+        c1, c2 = m["c1"], m["c2"]
+        L = math.dist(c1, c2)
+        u_ = ((c2[0] - c1[0]) / L, (c2[1] - c1[1]) / L)
+        s1_ = ((m["b1"][0] - c1[0]) * u_[0] + (m["b1"][1] - c1[1]) * u_[1]) * SC
+        s2_ = ((m["b2"][0] - c1[0]) * u_[0] + (m["b2"][1] - c1[1]) * u_[1]) * SC
+        sg = 1 if s2_ >= s1_ else -1
+        pts_ = [[0.0, m["delta"][0]]] + [[round((sp - s1_) * sg, 1), round(dv, 2)] for sp, dv in m["dprof"]] + \
+            [[round(abs(s2_ - s1_), 1), m["delta"][1]]]
+        return {"prof": sorted(pts_), "prof_n": nn.round(6).tolist()}
 
     # --- chiếu sang 3D (mặt trước y = -h), xoay 4 mặt
     def to3(p, delta_mm=0.0):
@@ -886,6 +1076,7 @@ def main(dxf, outdir):
                 "frames": {"bv": [e1.round(6).tolist(), e2.round(6).tolist()]}, "offs": {"bv": [0, 0, 0]},
                 "poff1": (nn * m["delta"][0] / 1000).round(6).tolist(),
                 "poff2": (nn * m["delta"][1] / 1000).round(6).tolist(),
+                **(prof3d(m, nn) if m.get("dprof") else {}),
                 "g": [m["heel_to_center"] or s_["b"] / 2, 0.0], "group": 2, "bolts": {}, "bolt": None,
                 "node1": None, "node2": None, "face_k": k, "x_pair": False, "default_up": False,
                 "side": "NGOAI" if m["out"] else "TRONG",
@@ -904,7 +1095,9 @@ def main(dxf, outdir):
                            "a2": a2.round(6).tolist(), "thick_dir": n.round(6).tolist(), "poly": poly,
                            "area_m2": round(area, 5), "mass_kg": round(area * pl["t"] / 1000 * 7850, 2),
                            "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0,
-                           "reason": ("bản mã %s theo hình chi tiết (%s)" % (pl["mark"], SHEET)) if pl.get("mark")
+                           "reason": ("bản mã nút đầu trên d%g (%s)" % (pl["t"], pl["note"]))
+                           if pl.get("hidden") else
+                           ("bản mã %s theo hình chi tiết (%s)" % (pl["mark"], SHEET)) if pl.get("mark")
                            else f"bản vẽ {SHEET} (mặt đứng)"})
             st = pl.get("strip")
             if st and st.get("L_mm"):
@@ -924,6 +1117,20 @@ def main(dxf, outdir):
                                "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0,
                                "reason": "bản %s %dx%d d%d hàn vuông góc giữa bản mã %s" % (
                                    st["mark"], st["w_mm"], st["L_mm"], st["t"], pl.get("mark", ""))})
+        for f_ in fillers2d:
+            # tấm đệm tròn (vòng nét đứt trên bản vẽ), nằm trong mặt cột tại tim bu lông
+            cen = Rk @ to3(f_["p"])[0] + n * f_["lo"] / 1000
+            a1f, a2f = Rk @ ex, Rk @ tup
+            rr = f_["r"] / 1000
+            poly = [[round(rr * math.cos(2 * math.pi * i / 20), 5), round(rr * math.sin(2 * math.pi * i / 20), 5)]
+                    for i in range(20)]
+            area = math.pi * rr * rr
+            plates.append({"kind": "filler", "node": cen.round(4).tolist(), "members": [], "t_mm": f_["t"],
+                           "on_leg": False, "origin": cen.round(5).tolist(), "a1": a1f.round(6).tolist(),
+                           "a2": a2f.round(6).tolist(), "thick_dir": n.round(6).tolist(), "poly": poly,
+                           "area_m2": round(area, 5), "mass_kg": round(area * f_["t"] / 1000 * 7850, 2),
+                           "bolt_max": 1, "d_max_mm": 0, "leg_bolts": 0,
+                           "reason": "tấm đệm Ø%d dày %g (ký hiệu D)" % (round(2 * f_["r"]), f_["t"])})
         for b in bolts2d:
             p = Rk @ to3(b["p"])[0] + n * b["lo"] / 1000          # mặt tựa đầu bu lông (phía trong)
             bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": n.round(6).tolist(), "grip_mm": round(b["hi"] - b["lo"], 1),
@@ -987,6 +1194,19 @@ def main(dxf, outdir):
             # mặt bằng: thanh vẽ toàn nét khuất là thanh nằm DƯỚI thanh khác, vẫn giữ
             q1 = ((m["b1"][0] - cxp) * SC - hp, (m["b1"][1] - cyp) * SC - hp)   # mm, gốc = tâm cột, đầu thanh thật
             q2 = ((m["b2"][0] - cxp) * SC - hp, (m["b2"][1] - cyp) * SC - hp)
+            # đường tâm chạy qua trục đối xứng mà nét mép bị ngắt (vòng nhãn tiết diện đè lên): thanh liền qua trục
+            qc1 = ((m["c1"][0] - cxp) * SC - hp, (m["c1"][1] - cyp) * SC - hp)
+            qc2 = ((m["c2"][0] - cxp) * SC - hp, (m["c2"][1] - cyp) * SC - hp)
+            # thanh song song trục, đầu cách trục đối xứng < 250 mm: kéo tới trục (thanh liền qua trục, nét mép bị vòng
+            # nhãn tiết diện che); phần đối xứng sẽ ghép lại thành 1 thanh
+            dq = (q2[0] - q1[0], q2[1] - q1[1])
+            Lq_ = math.hypot(*dq)
+            for ii in (0, 1):
+                if Lq_ > 0 and abs(dq[ii]) / Lq_ > 0.999:
+                    if -250 < q2[ii] < 0 and q2[ii] > q1[ii]:
+                        q2 = tuple(0.0 if jj == ii else q2[jj] for jj in (0, 1))
+                    elif -250 < q1[ii] < 0 and q1[ii] > q2[ii]:
+                        q1 = tuple(0.0 if jj == ii else q1[jj] for jj in (0, 1))
             ax_ = unit([q2[0] - q1[0], q2[1] - q1[1], 0])
             on_face = (abs(ax_[1]) > 0.999 and abs(q1[0] + h) < 120 and abs(q2[0] + h) < 120) or \
                       (abs(ax_[0]) > 0.999 and abs(q1[1] + h) < 120 and abs(q2[1] + h) < 120)
@@ -1278,15 +1498,19 @@ def main(dxf, outdir):
               if e.dxf.name in ("1", "2", "3") and inb(e.dxf.insert) and zf(e.dxf.insert[1]) < BASE_ZONE]
         tz = tup[2]
 
-        def cost(H):
+        def cost(H, dz):
             c = 0.0
             for holes, xf in ((RIB1_H, lambda u: -(H + 200) + u), (RIB3_H, lambda u: H - u)):
                 for u, v in holes:
-                    c += min(math.hypot(bx - xf(u), bz - v * tz) for bx, bz in bb) if bb else 0
+                    c += min(math.hypot(bx - xf(u), bz - (v * tz + dz)) for bx, bz in bb) if bb else 0
             return c
         h0 = halfw(y0)
-        HEEL = min(np.arange(h0 - 20, h0 + 60, 0.5), key=cost)
-        rep["base_heel_fit_mm"] = {"heel": float(HEEL), "lech_tb_mm": round(cost(HEEL) / (len(RIB1_H) + len(RIB3_H)), 1)}
+        HEEL, DZ = min(((H, dz) for H in np.arange(h0 - 20, h0 + 120, 0.5) for dz in np.arange(-20, 31, 1.0)),
+                       key=lambda z_: cost(*z_))
+        nh = len(RIB1_H) + len(RIB3_H)
+        rep["base_heel_fit_mm"] = {"heel": float(HEEL), "lech_tb_mm": round(cost(HEEL, DZ) / nh, 1),
+                                   "lo_tren_bu_long_mat_dung_cao_hon_mm": float(DZ),
+                                   "ghi_chu": "sườn đặt đáy trên mặt bản đế (cao độ 0) như DT-02"}
     slope_abs = abs(slope)
     Z0 = 11.0
     T_RIB = 12.0
@@ -1663,9 +1887,52 @@ def main(dxf, outdir):
             need = ED[20] - min(xs)
             if need > 0.5:
                 sign = -1 if key == "p1" else 1
-                m[key] = (np.array(m[key]) + sign * u_ * need / 1000).round(5).tolist()
+                orig_ = np.array(m[key])
+                lg_ = [o for o in members if o["rule"] == "leg" and
+                       CK.seg_dist(orig_, orig_ + 1e-6, *CK.frame(o)[:2]) < 0.4]
+
+                def hits_leg():
+                    sp = CK.samples(m, LIB)
+                    sp = sp[np.linalg.norm(sp - np.array(m[key]), axis=1) < 0.25]
+                    if any(np.any(CK.where_v(o, LIB, sp, 0.001) > 0) for o in lg_):
+                        return True
+                    for o in lg_:
+                        so = CK.samples(o, LIB)
+                        so = so[np.linalg.norm(so - np.array(m[key]), axis=1) < 0.25]
+                        if len(so) and np.any(CK.where_v(m, LIB, so, 0.001) > 0):
+                            return True
+                    return False
+                got = need
+                while got > 0:
+                    m[key] = (orig_ + sign * u_ * got / 1000).round(5).tolist()
+                    if not hits_leg():
+                        break
+                    got -= 1.0
+                if got <= 0:
+                    m[key] = orig_.round(5).tolist()
+                    got = 0.0
                 m["length"] = round(float(np.linalg.norm(np.array(m["p2"]) - np.array(m["p1"]))), 4)
-                rep["base_end_extended"].append({"section": m["section"], "mm": round(need, 1)})
+                rep["base_end_extended"].append({"section": m["section"], "mm": round(got, 1),
+                                                 **({"thieu_mm": round(need - got, 1),
+                                                     "ly_do": "kéo đủ thì chạm cánh thanh cánh"} if got < need - 0.5 else {})})
+
+    # đầu thanh vách đặt trên/dưới thanh vách khác còn chạm cánh đứng thanh chủ: lùi đầu thanh từng 5 mm
+    for pm_ in [m for m in members if m["rule"] == "plan" and m.get("on_plan")]:
+        for key in pm_["on_plan"]:
+            hosts = [o for o in members if o is not pm_ and o["rule"] == "plan"
+                     and CK.seg_dist(np.array(pm_[key]), np.array(pm_[key]) + 1e-6, *CK.frame(o)[:2]) < 0.12]
+            if not any(touching(pm_, o) for o in hosts):
+                continue
+            P_ = np.array(pm_[key])
+            other = np.array(pm_["p2" if key == "p1" else "p1"])
+            u_ = (other - P_) / np.linalg.norm(other - P_)
+            for dmm in range(5, 35, 5):
+                pm_[key] = (P_ + u_ * dmm / 1000).round(5).tolist()
+                if not any(touching(pm_, o) for o in hosts):
+                    break
+            pm_["length"] = round(float(np.linalg.norm(np.array(pm_["p2"]) - np.array(pm_["p1"]))), 4)
+            rep["clash_fix"].append({"loai": "lùi đầu thanh vách khỏi cánh đứng thanh vách chủ", "plan": pm_["plan"],
+                                     "section": pm_["section"], "mm": dmm})
 
     face_m = [m for m in members if m["rule"] == "face"]
     for i, a_ in enumerate(face_m):
@@ -1674,18 +1941,38 @@ def main(dxf, outdir):
                 continue
             if CK.seg_dist(*CK.frame(a_)[:2], *CK.frame(b_)[:2]) > 0.15 or not touching(a_, b_):
                 continue
-            # đầu thanh gần góc cột của mỗi thanh
-            keys = []
-            for m_ in (a_, b_):
-                lgd = [min(np.linalg.norm(np.cross(np.array(o["p2"]) - np.array(o["p1"]), np.array(o["p1"]) - np.array(m_[k_])))
-                           / np.linalg.norm(np.array(o["p2"]) - np.array(o["p1"])) for o in legs3) for k_ in ("p1", "p2")]
-                keys.append("cut1" if lgd[0] < lgd[1] else "cut2")
+            # đầu thanh gần chỗ chạm (cả 2 đầu thanh chéo đều ở thanh cánh nên lấy theo vị trí chạm)
+            spa = CK.samples(a_, LIB)
+            hit_ = spa[CK.where_v(b_, LIB, spa, 0.001) > 0]
+            if not len(hit_):
+                spb = CK.samples(b_, LIB)
+                hit_ = spb[CK.where_v(a_, LIB, spb, 0.001) > 0]
+            cp_ = hit_.mean(axis=0)
+            keys = ["cut1" if np.linalg.norm(np.array(m_["p1"]) - cp_) < np.linalg.norm(np.array(m_["p2"]) - cp_)
+                    else "cut2" for m_ in (a_, b_)]
             if a_.get(keys[0]) or b_.get(keys[1]):
+                # đã vát ở cặp khác: tăng dần vát đang có (bội 5 mm) tới khi hết chạm
+                ok_ = False
+                for inc in range(5, 120, 5):
+                    for m_, k_ in ((a_, keys[0]), (b_, keys[1])):
+                        c0 = m_.get(k_)
+                        if c0 and c0["flange"] == "out":
+                            c0["b"] = c0.setdefault("_b0", c0["b"]) + inc
+                    if not touching(a_, b_):
+                        ok_ = True
+                        break
+                for m_, k_ in ((a_, keys[0]), (b_, keys[1])):
+                    c0 = m_.get(k_)
+                    if c0 and "_b0" in c0:
+                        c0.pop("_b0")
+                        c0["note"] = re.sub(r"\d+x\d+mm", f"{c0['a']}x{c0['b']}mm", c0.get("note", ""))
+                if not ok_:
+                    rep["warnings"].append(f"chạm tại góc cột chưa gỡ được: {a_['section']}/{b_['section']}")
                 continue
             # vát cả 2 thanh như nhau, chọn (ngang cánh a, dọc thanh b) bội 5 mm có diện tích cắt nhỏ nhất
             best = None
-            for A_ in range(15, 70, 5):
-                for B_ in range(15, 130, 5):
+            for A_ in range(15, 75, 5):
+                for B_ in range(15, 170, 5):
                     if best and A_ * B_ >= best[0]:
                         break
                     for m_, k_ in ((a_, keys[0]), (b_, keys[1])):

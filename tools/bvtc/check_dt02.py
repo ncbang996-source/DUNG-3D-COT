@@ -134,6 +134,16 @@ def bolt_edges(s, S):
     return rep
 
 
+def prof_extra(m, xmm, Lmm):
+    """Phần lệch độ sâu (mm) so với nối thẳng 2 đầu, tại xmm (thanh bẻ lệch)."""
+    pr = m.get("prof")
+    xmm = np.atleast_1d(np.asarray(xmm, float))
+    if not pr:
+        return np.zeros_like(xmm)
+    xs, ds = [p[0] for p in pr], [p[1] for p in pr]
+    return np.interp(xmm, xs, ds) - (ds[0] + (ds[-1] - ds[0]) * xmm / Lmm)
+
+
 def bend_theta(m, xmm):
     """Góc bẻ (rad) cánh còn lại tại vị trí xmm dọc thanh (0 ngoài vùng bẻ, tuyến tính trong đoạn chuyển tiếp)."""
     xmm = np.atleast_1d(np.asarray(xmm, float))
@@ -157,6 +167,9 @@ def where_v(m, S, Q, eps=0.0015):
     # hình thanh trong app: P(f) = P1 + f (P2 - P1) + e1 (a - g1) + e2 (c - g2) (khung e1, e2 không nhất thiết
     # vuông góc trục khi 2 đầu có độ sâu khác nhau) -> giải hệ 3x3
     sol = np.linalg.solve(np.c_[P2 - P1, e1, e2], (Q - P1).T)
+    if m.get("prof"):
+        Q = Q - np.outer(prof_extra(m, sol[0] * L * 1000, L * 1000) / 1000, np.array(m["prof_n"]))
+        sol = np.linalg.solve(np.c_[P2 - P1, e1, e2], (Q - P1).T)
     x = sol[0] * L
     a = sol[1] + g1
     c = sol[2] + g2
@@ -207,6 +220,8 @@ def samples(m, S, step=0.01):
     pts = []
     for x in np.arange(0.002, L - 0.001, step):
         base = P1 + u * x
+        if m.get("prof"):
+            base = base + np.array(m["prof_n"]) * float(prof_extra(m, x * 1000, L * 1000)[0]) / 1000
         for w in np.linspace(0.002, b - 0.002, max(3, int(b / step) + 1)):
             for c in (0.0015, t / 2, t - 0.0015):
                 if not cut_removed(m, x, L, "conn", w, b):
