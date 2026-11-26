@@ -1,0 +1,59 @@
+# Dựng 3D cột thép từ bản vẽ chế tạo (N122) — hướng dẫn cho Claude
+
+Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ chế tạo (BVTC). Luôn trả lời **tiếng Việt**.
+
+## Cách làm việc người dùng yêu cầu
+- Điều gì không rõ trên bản vẽ: **hỏi lại trước khi làm**, không đoán. Nêu cách hiểu đề xuất kèm ảnh cắt bản vẽ.
+- Số liệu lấy **chính xác từ DXF** (toạ độ, hình chi tiết, nhãn), không "gần đúng". Phần phải suy luận thì ghi rõ là suy luận.
+- Mô hình phải **không chạm thép** (thép–thép, bản mã–thép), bu lông xuyên đúng các lớp thép. Chạy kiểm tra trước khi báo xong.
+- Khi nhắc ảnh người dùng gửi: gọi theo thứ tự trong tin nhắn + mô tả nội dung, không dùng tên file nội bộ.
+- Góp ý thường gửi dạng file `cmt.docx` (đoạn chữ + ảnh). Giải nén: `unzip` rồi ghép đoạn văn với `word/media/imageN.png`
+  qua `word/_rels/document.xml.rels`.
+- Báo kết quả: nêu cái đã sửa theo từng ý góp ý, số liệu đo được, cái còn suy luận/đề xuất cần xác nhận.
+- Xong việc: commit + push lên `main` (người dùng làm trên `main`), gửi file `dist/*.html`.
+
+## Dữ liệu
+- `data/n122/BVTC_COT_N122-3230.dxf` — bản vẽ chế tạo cột N122 (mọi tờ trong 1 file, toạ độ DXF, tỉ lệ 1/25,
+  chi tiết 1/10). Tờ: DT-02, DT-01 (đã dựng), DN-01, DN-02 (chưa).
+- `data/NC111-32.dxf` + PDF — dự án đầu (cột NC111-32 dựng từ 3DLINE), app gốc `web/`, `src/`.
+
+## Chương trình
+- `tools/bvtc/dt02.py` — bộ dựng mọi đoạn thân (tên cũ). Cấu hình tờ trong `SHEETS` (khung mặt đứng, mặt cắt,
+  sườn chân cột, đặc thù tờ). Thêm tờ mới = thêm mục `SHEETS` rồi chạy, xem báo cáo `report.build`.
+- `tools/bvtc/bvtc_read.py` — đọc mặt đứng 2D thành thanh (nét mép, đường tâm, nét chiều dày, nhãn tiết diện).
+- `tools/bvtc/check_dt02.py` — kiểm tra va chạm (khớp đúng hình app dựng: khung lệch, vát, bẻ cánh, bẻ lệch).
+- `tools/bvtc/render_regions.py` — cắt vùng DXF ra PNG để xem bản vẽ.
+- `tools/build_standalone.mjs` — đóng gói `web/` + scene JSON thành 1 file HTML (cần `npm install` một lần).
+- `tools/shot.mjs` — chụp mô hình từ HTML theo góc camera.
+- `web/app.js` — app three.js (vát cánh `cut1/cut2`, bẻ cánh `bends`, bẻ lệch `prof`, tấm đệm `kind: filler`).
+
+## Lệnh
+```bash
+D=data/n122/BVTC_COT_N122-3230.dxf
+python3 tools/bvtc/dt02.py $D out DT-01          # hoặc DT-02 (~40 s); ra out/dt01_scene.json, out/dt01_check.json
+python3 tools/bvtc/check_dt02.py out/dt01_scene.json clash    # thép–thép: phải "cặp chạm: 0"
+python3 tools/bvtc/check_dt02.py out/dt01_scene.json plates   # bản mã–thép: phải "bản mã chạm thép: 0"
+cp out/dt01_scene.json data/n122/dt01_scene.json
+node tools/build_standalone.mjs data/n122/dt01_scene.json dist/N122_DT-01.html
+node tools/shot.mjs dist/N122_DT-01.html <thư mục ảnh> '[{"tag":"tong","t":[0,0,5],"c":[9,-13,9]}]'
+python3 tools/bvtc/render_regions.py $D <thư mục ảnh> ten,x0,y0,rong,cao   # cắt bản vẽ (toạ độ DXF)
+python3 -m pytest -q
+```
+Sau khi sửa bộ dựng: chạy lại **cả DT-02** và so với `data/n122/dt02_scene.json` (members/bolts phải giữ nguyên
+nếu không cố ý đổi) để không làm hỏng đoạn đã được duyệt.
+
+## Hệ toạ độ mô hình
+Mét; z = 0 tại đầu dưới thanh cánh (mặt trên bản đế); mặt trước y = −h(z). Độ sâu δ (mm) tính từ mặt phẳng qua
+đường tim thanh cánh, dương ra ngoài: cánh thanh cánh δ 68..80 (HL150x12, g = 80). 4 mặt giống nhau xoay 90°.
+
+## Quy tắc đã chốt với người dùng (chi tiết: `docs/THAM_KHAO_BVTC_N122.md`)
+- Đọc mặt đứng: nét chiều dày KHUẤT → thanh TRONG (cánh còn lại chĩa vào), LIỀN → NGOÀI. Mặt cắt: LIỀN → chĩa LÊN.
+- TRONG áp mặt trong thanh chủ/bản mã, NGOÀI áp mặt ngoài; thanh ép sát (cho phép ép vài mm), không thể hiện uốn.
+- Bản mã tại thanh cánh áp mặt ngoài cánh. Thanh TRONG có bu lông qua cánh thanh cánh thì ốp mặt trong thanh cánh;
+  khe với bản mã lấp bằng tấm đệm (khối "D", ký hiệu `nD.F_T`).
+- Bản mã có số hiệu → lấy hình + lỗ từ hình chi tiết (khớp xoay/lật). Bản hàn vuông góc (DT-02 bản 419) chĩa RA NGOÀI.
+- Đầu thanh = nét đầu thanh vẽ rõ; nếu khuất thì = bu lông ngoài cùng trên đường đinh + 25/30/40 (M16/20/24).
+- Thanh giằng vách: tựa trên/dưới cánh ngang thanh mặt cột; cánh ngang **bẻ cục bộ** thành nằm ngang tại chỗ bắt.
+  Tim bu lông cách đầu ngoài thanh ngang 55, chạm thì tăng 5 mm/lần; góc thừa thì vát.
+- Vách giao nhau: thanh chĩa LÊN đặt trên thanh chủ, chĩa XUỐNG đặt sát mép dưới.
+- Chạm còn lại: vát góc (bội 5 mm); cái bản vẽ không ghi thì ghi "ĐỀ XUẤT" và báo người dùng.
