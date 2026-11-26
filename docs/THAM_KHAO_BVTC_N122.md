@@ -97,7 +97,8 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   thân xuyên qua các lớp thép (kẹp tính theo thanh + thanh chủ/bản mã), đầu bu lông phía trong, đai ốc ra ngoài.
   Chân cột: 13 lỗ mỗi sườn theo chi tiết D322/D323 (10 lỗ 12.20_70 kẹp sườn + cánh thanh cánh, 3 lỗ 3.20_60 kẹp
   sườn + thanh xiên chính áp mặt trong sườn).
-- Vát cánh theo ghi chú: 40x60 đầu dưới thanh xiên chính (bắt sườn chân cột); 45x45 thanh ngang L80x6 tại bản mã giữa;
+- Vát cánh theo ghi chú: 40x60 đầu dưới thanh xiên chính (bắt sườn chân cột); 45x45 đầu 4 thanh xiên L90x7 tại bản mã giữa
+  (mũi tên ghi chú chỉ vào thanh xiên, KHÔNG phải thanh ngang - đã sửa);
   30x30 (mặt cắt 1-1, 3-3, 4-4) và 45x45 (2-2) ở cánh nằm ngang của thanh ngang mặt cột tại thanh cánh.
 - Quy tắc (người dùng xác nhận): ở liên kết, thanh luôn ÉP SÁT bản mã/thanh chủ, mặt tiếp xúc trùng khít; độ uốn nhẹ
   trên chiều dài thanh không ghi trên bản vẽ và không cần thể hiện. Mô hình: mỗi đầu thanh có độ sâu riêng = mặt tiếp
@@ -112,5 +113,33 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   Đã kiểm: mọi bu lông đầu thanh giằng vách nằm trên cánh ngang của thanh ngang.
 - Đầu thanh giằng vách tại đầu NGOÀI thanh ngang (mặt cắt ghi "140 | 55"): tim bu lông cách đầu thanh ngang 55 mm;
   nếu thanh giằng chạm thép thì tăng 60, 65... (dời bu lông + đầu thanh giằng vào phía góc) tới khi hết chạm
-  (người dùng chốt). Kết quả DT-02: 4-4 = 65, 3-3 = 70, 1-1 = 80 / 110 (chạm thanh xiên L90x7 khi để 55).
+  (người dùng chốt). Kết quả DT-02 (kiểm chạm 2 chiều theo đúng hình thanh): 4-4 = 65, 3-3 = 65/70, 1-1 = 100.
   Góc cánh ngang thanh ngang còn chạm thì vát (DT-02: không có chỗ nào cần).
+
+
+## Đợt góp ý cmt.docx (5 ý) - quy tắc rút ra
+
+- Bu lông: lớp thép kẹp lấy theo HÌNH HỌC đã dựng (mọi cánh liên kết / bản mã / cánh thanh cánh có lỗ tại tim bu lông),
+  không đoán theo thanh gần nhất; kiểm các lớp phải liền nhau. Độ sâu thanh tại điểm bắt = nội suy dọc thanh chủ
+  (thanh thẳng), lan truyền lặp tới khi ổn định -> 2 thanh TRONG bắt vào thanh xiên L90x7 (nút cao độ 1-1) ốp đúng
+  mặt trong L90x7, thanh NGOÀI ốp mặt ngoài.
+- Nét mép thanh vẽ đứt nhiều đoạn (bị thanh khác cắt qua / bản mã che) được cộng dồn. Thanh có đường tâm liền nhưng
+  nét mép ngắt tại bản mã (thanh ngang L80x6 qua bản mã giữa) = 2 thanh, mỗi thanh dừng ở bản mã.
+- Bản mã giữa mặt: hình dạng + lỗ lấy theo HÌNH CHI TIẾT (số hiệu 418: 340x420 d10, 12 lỗ), tâm chi tiết trùng tâm
+  bản mã trên mặt đứng. Dải hẹp vẽ trong bản mã (419: 80x420 d8, có ký hiệu hàn) = bản hàn VUÔNG GÓC, chĩa vào trong
+  (cùng phía cánh còn lại của các thanh TRONG; vì vậy mới phải vát cánh 4 thanh xiên). Bản mã áp lưng các thanh TRONG.
+- Vát cánh 45x45 tại bản mã giữa: góc đầu thanh sát bản hàn là góc LƯNG -> cắt tam giác 45x45 ở góc lưng cánh liên
+  kết, cánh còn lại lùi 45 mm (đúng hình góc cắt vẽ trên mặt đứng).
+- Đầu thanh vẽ rõ (có nét đầu thanh vuông góc trục) thì giữ nguyên; chỉ kéo dài theo bu lông khi đầu thanh bị khuất,
+  và chỉ tính bu lông nằm TRÊN đường đinh của thanh (bu lông nối thanh cánh không tính) -> hết đầu L90x7 trên cùng
+  chồng lên cánh thanh cánh.
+- Vách giao nhau (2-2): thanh có cánh còn lại chĩa LÊN đặt TRÊN cánh nằm ngang thanh chủ, chĩa XUỐNG đặt SÁT MÉP DƯỚI
+  (thanh xiên từ góc nằm trên thanh xiên lớn, 2 thanh L70x6 sát dưới thanh xiên lớn). Thanh chạy qua trục đối xứng
+  (L70x6 1406 + 1406) ghép thành 1 thanh. Đầu thanh vách = bu lông ngoài cùng + 25/30/40 mm.
+- Mặt cắt: đường đinh cánh nằm ngang thanh mặt cột đọc ngay trên mặt cắt (không lấy theo mặt đứng).
+- Cánh nằm ngang thanh mặt cột vuông góc mặt cột (nghiêng ~8,5° theo độ xiên mặt cột) nên thanh vách nằm ngang chỉ tựa
+  mép lưng; tại tim bu lông hở 4-6 mm, khi siết sẽ ép sát (không thể hiện xoắn thanh).
+- Gỡ chạm còn lại bằng vát góc (bội 5 mm): góc đầu thanh vách 2-2 lấn vào cánh thanh cánh / bản mã 418 (10x10, 20x20);
+  ĐỀ XUẤT (bản vẽ không ghi): 2 thanh L70x6 hai mặt kề nhau bắt vào thanh cánh cùng cao độ 2-2, cánh còn lại đâm nhau
+  ở góc cột -> vát góc mép cánh còn lại 45x70 mm.
+- Kiểm tra tự động (tools/bvtc/check_dt02.py): thép-thép, bản mã-thép, bu lông xuyên dọc cánh = 0.

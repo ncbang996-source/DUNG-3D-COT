@@ -101,7 +101,7 @@ function clipBelow(poly, h) {
   return out;
 }
 
-// Thanh có vát cánh (cut1/cut2 = {flange: 'conn'|'out', a: ngang cánh, b: dọc thanh} mm): dựng 2 cánh thành 2
+// Thanh có vát cánh (cut1/cut2 = {flange: 'conn'|'out'|'heel', a: ngang cánh, b: dọc thanh} mm): dựng 2 cánh thành 2
 // khối phẳng, cắt góc mép cánh ở đầu thanh tương ứng.
 function buildCutGeometry(m) {
   const s = sections[m.section];
@@ -119,9 +119,14 @@ function buildCutGeometry(m) {
     const W = s.b;
     let poly = [[0, 0], [L, 0], [L, W], [0, W]];
     const c1 = m.cut1 && m.cut1.flange === fl ? m.cut1 : null, c2 = m.cut2 && m.cut2.flange === fl ? m.cut2 : null;
-    poly = [[0, 0], [L, 0]];
-    if (c2) poly.push([L, W - c2.a], [L - c2.b, W]); else poly.push([L, W]);
-    if (c1) poly.push([c1.b, W], [0, W - c1.a]); else poly.push([0, W]);
+    // vát góc LƯNG (flange 'heel'): cánh liên kết cắt tam giác a x b ở góc lưng; cánh còn lại (gắn ở lưng) bị
+    // đường cắt đi qua nên lùi đầu thanh b mm
+    const h1 = m.cut1 && m.cut1.flange === 'heel' ? m.cut1 : null, h2 = m.cut2 && m.cut2.flange === 'heel' ? m.cut2 : null;
+    poly = [];
+    if (h1 && fl === 'conn') poly.push([0, h1.a], [h1.b, 0]); else poly.push([h1 ? h1.b : 0, 0]);
+    if (h2 && fl === 'conn') poly.push([L - h2.b, 0], [L, h2.a]); else poly.push([h2 ? L - h2.b : L, 0]);
+    if (c2) poly.push([L, W - c2.a], [L - c2.b, W]); else poly.push([h2 && fl === 'out' ? L - h2.b : L, W]);
+    if (c1) poly.push([c1.b, W], [0, W - c1.a]); else poly.push([h1 && fl === 'out' ? h1.b : 0, W]);
     const map = fl === 'conn' ? (x, w, t) => P(x, w, t) : (x, w, t) => P(x, t, w);
     const A0 = poly.map(([x, w]) => map(x, w, 0)), A1 = poly.map(([x, w]) => map(x, w, s.t));
     const n = poly.length;

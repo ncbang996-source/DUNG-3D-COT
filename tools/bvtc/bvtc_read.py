@@ -87,9 +87,28 @@ def members(doc, msp, box, labels=None):
         items = [(_rel(ref, S[i]), S[i]["k"]) for i in g]
         _, sr = _rel(ref, ref)
         Lr = sr[1] - sr[0]
-        # nét mép/nét chiều dày phải chạy dọc phần đáng kể của thanh (loại nét ngắn của thanh khác song song)
-        ed = sorted((round(o * SC, 1), k) for (o, sp), k in items
-                    if k != "A" and min(sp[1], sr[1]) - max(sp[0], sr[0]) >= 0.3 * Lr)
+        # nét mép/nét chiều dày phải chạy dọc phần đáng kể của thanh (loại nét ngắn của thanh khác song song).
+        # Một nét có thể bị vẽ đứt nhiều đoạn (thanh khác cắt qua, bản mã che): cộng dồn các đoạn cùng vị trí.
+        byoff = {}
+        for (o, sp), k in items:
+            if k == "A":
+                continue
+            key = next((kk for kk in byoff if abs(kk[0] - o * SC) <= 0.5 and kk[1] == k), (round(o * SC, 1), k))
+            byoff.setdefault(key, []).append((sp[0], sp[1]))
+
+        def union_len(iv):
+            iv = sorted(x for x in iv if x[1] > x[0])
+            tot, cur = 0.0, None
+            for a_, b_ in iv:
+                if cur is None or a_ > cur[1]:
+                    if cur:
+                        tot += cur[1] - cur[0]
+                    cur = [a_, b_]
+                else:
+                    cur[1] = max(cur[1], b_)
+            return tot + (cur[1] - cur[0] if cur else 0.0)
+        ed = sorted(key for key, iv in byoff.items()
+                    if union_len([(max(a_, sr[0]), min(b_, sr[1])) for a_, b_ in iv]) >= 0.3 * Lr)
         if len(ed) < 2:
             ed = sorted((round(o * SC, 1), k) for (o, _), k in items if k != "A")
         if len(ed) < 2:
@@ -114,7 +133,8 @@ def members(doc, msp, box, labels=None):
         c1 = (ref["a"][0] + ax[0] * sref[0], ref["a"][1] + ax[1] * sref[0])
         c2 = (ref["a"][0] + ax[0] * sref[1], ref["a"][1] + ax[1] * sref[1])
         # đầu thanh THẬT: phạm vi các nét mép (không tính đường tâm, đường tâm vẽ kéo tới nút)
-        se = [sp for (o, sp), k in items if k != "A" and min(sp[1], sr[1]) - max(sp[0], sr[0]) >= 0.3 * Lr]
+        edset = set(ed)
+        se = [sp for key in edset for sp in byoff.get(key, [])]
         if se:
             e0, e1_ = min(x[0] for x in se), max(x[1] for x in se)
         else:
@@ -135,6 +155,9 @@ def members(doc, msp, box, labels=None):
             "width": round(hi - lo), "heel_dir": hv, "heel_to_center": (abs(heel_off) if heel else None),
             "vis": vis, "tline": tline, "centers_rel": cofs, "edges": "".join(k for _, k in ed),
             "all_hidden": all(k == "H" for _, k in ed),
+            # các đoạn nét mép (đơn vị bản vẽ, theo trục đường tâm chuẩn từ ref_a) để tìm chỗ thanh bị ngắt
+            "edge_iv": sorted([round(a_, 3), round(b_, 3)] for a_, b_ in se),
+            "ref_a": ref["a"], "ref_u": ax,
         })
     if labels is not None:
         assign_labels(out, labels)
