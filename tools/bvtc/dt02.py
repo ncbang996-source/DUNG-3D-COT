@@ -1352,6 +1352,40 @@ def main(dxf, outdir):
                 rep["warnings"].append(f"{pm_['plan']} {pm_['section']}: đầu thanh còn chạm, chưa gỡ được")
     # --- bu lông vách: xếp lại theo các lớp thép THỰC (sau khi đặt chồng thanh/vát): quét dọc trục bu lông,
     #     lấy mọi thép có lỗ tại đó; đầu bu lông ở mặt trên lớp trên cùng, kẹp tới mặt dưới lớp dưới cùng
+    # --- BẺ CÁNH CỤC BỘ (người dùng chốt, theo ảnh cột mẫu): cánh nằm ngang của thanh ngang mặt cột vuông góc mặt
+    #     cột nên nghiêng theo độ xiên mặt cột; tại chỗ thanh giằng vách bắt vào, cánh được bẻ cục bộ quanh mép lưng
+    #     thành mặt phẳng song song mặt đất -> thanh giằng tựa phẳng, hết hở. Vùng phẳng = vết thanh giằng trên cánh
+    #     + 10 mm mỗi bên, đoạn chuyển tiếp 40 mm.
+    rep["flange_bends"] = []
+    RAMP = 40.0
+    for pm_ in [m for m in members if m["rule"] == "plan" and "contact" in m]:
+        for key, c_ in pm_["contact"].items():
+            fh = byid.get(c_["host_id"])
+            if fh is None:
+                continue
+            P1, P2, e1, e2 = CK.frame(fh)
+            L = np.linalg.norm(P2 - P1)
+            u_ = (P2 - P1) / L
+            # bu lông vách của đầu thanh giằng này
+            Pk = np.array(pm_[key])
+            bb = [b_ for b_ in bolts if b_["kind"] == "plan" and np.linalg.norm(np.array(b_["p"])[:2] - Pk[:2]) < 0.2]
+            cen = np.array(min(bb, key=lambda b_: np.linalg.norm(np.array(b_["p"])[:2] - Pk[:2]))["p"]) if bb else Pk
+            xb = float(np.linalg.solve(np.c_[P2 - P1, e1, e2], cen - P1)[0] * L * 1000)
+            ub = unit(np.array(pm_["p2"]) - np.array(pm_["p1"]))
+            sphi = max(abs(float(np.linalg.norm(np.cross(ub, u_)))), 0.2)
+            cphi = abs(float(np.dot(ub, u_)))
+            half = 0.5 * (sec(pm_["section"])["b"] / sphi + sec(fh["section"])["b"] * cphi / sphi) + 10
+            # góc xoay quanh trục thanh để cánh còn lại (theo e2) nằm ngang
+            w_ = np.cross(u_, e2)
+            th = math.atan2(-e2[2], w_[2])
+            if abs(th) > math.pi / 2:
+                th -= math.copysign(math.pi, th)
+            x0, x1 = max(0.0, xb - half), min(L * 1000, xb + half)
+            fh.setdefault("bends", []).append({"x0": round(x0, 1), "x1": round(x1, 1), "ramp": RAMP,
+                                               "theta_deg": round(math.degrees(th), 3), "plan": pm_["plan"]})
+            rep["flange_bends"].append({"plan": pm_["plan"], "host": fh["section"], "brace": pm_["section"],
+                                        "len_mm": round(x1 - x0), "deg": round(math.degrees(th), 2)})
+
     rep["plan_bolt_layers"] = []
     zs_ = np.arange(-0.12, 0.12, 0.0005)
     for b_ in bolts:

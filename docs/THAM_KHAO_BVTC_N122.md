@@ -137,8 +137,11 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   (thanh xiên từ góc nằm trên thanh xiên lớn, 2 thanh L70x6 sát dưới thanh xiên lớn). Thanh chạy qua trục đối xứng
   (L70x6 1406 + 1406) ghép thành 1 thanh. Đầu thanh vách = bu lông ngoài cùng + 25/30/40 mm.
 - Mặt cắt: đường đinh cánh nằm ngang thanh mặt cột đọc ngay trên mặt cắt (không lấy theo mặt đứng).
-- Cánh nằm ngang thanh mặt cột vuông góc mặt cột (nghiêng ~8,5° theo độ xiên mặt cột) nên thanh vách nằm ngang chỉ tựa
-  mép lưng; tại tim bu lông hở 4-6 mm, khi siết sẽ ép sát (không thể hiện xoắn thanh).
+- Cánh nằm ngang thanh mặt cột vuông góc mặt cột (nghiêng ~8,4° theo độ xiên mặt cột). Người dùng chốt (ảnh cột mẫu
+  Dz 110kV Hồng Ngự - Vĩnh Hưng): tại chỗ thanh giằng vách bắt vào, BẺ CÁNH CỤC BỘ quanh mép lưng thành mặt phẳng song
+  song mặt đất. Mô hình: vùng phẳng = vết thanh giằng trên cánh + 10 mm mỗi bên (~165 mm), chuyển tiếp 40 mm mỗi bên;
+  thanh giằng tựa phẳng, hết hở tại bu lông (36 chỗ: 1-1, 2-2, 3-3, 4-4 x 4 mặt).
+- Bản 419 chĩa RA NGOÀI (người dùng chốt).
 - Gỡ chạm còn lại bằng vát góc (bội 5 mm): góc đầu thanh vách 2-2 lấn vào cánh thanh cánh / bản mã 418 (10x10, 20x20);
   ĐỀ XUẤT (bản vẽ không ghi): 2 thanh L70x6 hai mặt kề nhau bắt vào thanh cánh cùng cao độ 2-2, cánh còn lại đâm nhau
   ở góc cột -> vát góc mép cánh còn lại 45x70 mm.

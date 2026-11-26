@@ -103,6 +103,32 @@ function clipBelow(poly, h) {
 
 // Thanh có vát cánh (cut1/cut2 = {flange: 'conn'|'out'|'heel', a: ngang cánh, b: dọc thanh} mm): dựng 2 cánh thành 2
 // khối phẳng, cắt góc mép cánh ở đầu thanh tương ứng.
+// góc bẻ cánh (rad) tại x (mm dọc thanh): 0 ngoài vùng, tuyến tính trong đoạn chuyển tiếp
+function bendTheta(bends, x) {
+  let th = 0;
+  for (const b of bends) {
+    const f = Math.max(0, Math.min(1, (x - (b.x0 - b.ramp)) / b.ramp, ((b.x1 + b.ramp) - x) / b.ramp));
+    const v = f * b.theta_deg * Math.PI / 180;
+    if (Math.abs(v) > Math.abs(th)) th = v;
+  }
+  return th;
+}
+
+// giữ phần đa giác (x, w) nằm trong x0 <= x <= x1
+function clipX(poly, x0, x1) {
+  const half = (pg, keep, xc) => {
+    const out = [];
+    for (let i = 0; i < pg.length; i++) {
+      const a = pg[i], b = pg[(i + 1) % pg.length];
+      const ia = keep(a[0]), ib = keep(b[0]);
+      if (ia) out.push(a);
+      if (ia !== ib) { const t = (xc - a[0]) / (b[0] - a[0]); out.push([xc, a[1] + t * (b[1] - a[1])]); }
+    }
+    return out;
+  };
+  return half(half(poly, (x) => x >= x0 - 1e-9, x0), (x) => x <= x1 + 1e-9, x1);
+}
+
 function buildCutGeometry(m) {
   const s = sections[m.section];
   const [g1, g2] = m.g;
@@ -111,6 +137,7 @@ function buildCutGeometry(m) {
   const p1 = new THREE.Vector3(...(m.p1d || m.p1)).add(off).add(new THREE.Vector3(...(m.poff1 || [0, 0, 0])));
   const p2 = new THREE.Vector3(...(m.p2d || m.p2)).add(off).add(new THREE.Vector3(...(m.poff2 || [0, 0, 0])));
   const L = p1.distanceTo(p2) * 1000;
+  const u = p2.clone().sub(p1).normalize();
   const P = (x, a, b) => p1.clone().lerp(p2, x / L).addScaledVector(e1, (a - g1) / 1000).addScaledVector(e2, (b - g2) / 1000);
   const pos = [];
   const push = (...vs) => vs.forEach((v) => pos.push(v.x, v.y, v.z));
@@ -127,11 +154,27 @@ function buildCutGeometry(m) {
     if (h2 && fl === 'conn') poly.push([L - h2.b, 0], [L, h2.a]); else poly.push([h2 ? L - h2.b : L, 0]);
     if (c2) poly.push([L, W - c2.a], [L - c2.b, W]); else poly.push([h2 && fl === 'out' ? L - h2.b : L, W]);
     if (c1) poly.push([c1.b, W], [0, W - c1.a]); else poly.push([h1 && fl === 'out' ? h1.b : 0, W]);
-    const map = fl === 'conn' ? (x, w, t) => P(x, w, t) : (x, w, t) => P(x, t, w);
-    const A0 = poly.map(([x, w]) => map(x, w, 0)), A1 = poly.map(([x, w]) => map(x, w, s.t));
-    const n = poly.length;
-    for (let i = 0; i < n; i++) { const j = (i + 1) % n; push(A0[i], A0[j], A1[j], A0[i], A1[j], A1[i]); }
-    for (let i = 1; i < n - 1; i++) { push(A0[0], A0[i + 1], A0[i]); push(A1[0], A1[i], A1[i + 1]); }
+    const bends = fl === 'out' ? (m.bends || []) : [];
+    const map = fl === 'conn' ? (x, w, t) => P(x, w, t) : (x, w, t) => {
+      if (!bends.length) return P(x, t, w);
+      // cánh bẻ cục bộ: xoay quanh mép lưng (trục thanh) góc theta(x)
+      const th = bendTheta(bends, x);
+      const H = P(x, 0, 0);
+      const v = P(x, t, w).sub(H);
+      return H.add(v.applyAxisAngle(u, th));
+    };
+    // cắt đa giác thành các dải theo trạm x (đầu/cuối đoạn chuyển tiếp) để mặt bẻ đi đúng hình
+    const stations = [...new Set(bends.flatMap((b) => [b.x0 - b.ramp, b.x0, b.x1, b.x1 + b.ramp])
+      .filter((x) => x > 0 && x < L))].sort((a, b) => a - b);
+    const cuts = [0, ...stations, L];
+    for (let k = 0; k < cuts.length - 1; k++) {
+      let pg = clipX(poly, cuts[k], cuts[k + 1]);
+      if (pg.length < 3) continue;
+      const A0 = pg.map(([x, w]) => map(x, w, 0)), A1 = pg.map(([x, w]) => map(x, w, s.t));
+      const n = pg.length;
+      for (let i = 0; i < n; i++) { const j = (i + 1) % n; push(A0[i], A0[j], A1[j], A0[i], A1[j], A1[i]); }
+      for (let i = 1; i < n - 1; i++) { push(A0[0], A0[i + 1], A0[i]); push(A1[0], A1[i], A1[i + 1]); }
+    }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -140,7 +183,7 @@ function buildCutGeometry(m) {
 }
 
 function buildGeometry(m) {
-  if (m.cut1 || m.cut2) return buildCutGeometry(m);
+  if (m.cut1 || m.cut2 || (m.bends && m.bends.length)) return buildCutGeometry(m);
   const s = sections[m.section];
   const chamfer = !!(m.chamfer1 || m.chamfer2);
   // thanh vát: phần cánh không khoan lỗ cao hơn h0 = t + r1 dựng riêng (hình thang), profile cắt tại h0
@@ -352,6 +395,7 @@ function showInfo(m) {
       m.rule === 'face' ? `Trên mặt cột ${m.face}` + (m.x_pair ? ' · cặp chữ X' : '') +
         (m.variant.startsWith('out') ? ' · lưng áp mặt NGOÀI cánh thanh cánh' : ' · lưng áp mặt TRONG cánh thanh cánh') :
       'Vách ngang / xà'],
+    ...((m.bends && m.bends.length) ? [['Bẻ cánh cục bộ', m.bends.map((b) => `${Math.round(b.x1 - b.x0)} mm, ${Math.abs(b.theta_deg).toFixed(1)}° (vách ${b.plan})`).join('; ')]] : []),
     ...((m.cut1 || m.cut2) ? [['Vát cánh', [m.cut1, m.cut2].filter(Boolean).map((c) => c.note || `${c.a}x${c.b}`).join('; ')]] : []),
     ...(m.drawing && m.drawing.delta_mm ? [['Độ sâu 2 đầu (mm)', m.drawing.delta_mm.join(' / ')]] : []),
     ...(m.p1d ? [['Điểm bắt đã dời', `${m.p1d.join(', ')} → ${m.p2d.join(', ')}`]] : []),

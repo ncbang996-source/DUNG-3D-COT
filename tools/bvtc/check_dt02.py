@@ -134,6 +134,18 @@ def bolt_edges(s, S):
     return rep
 
 
+def bend_theta(m, xmm):
+    """Góc bẻ (rad) cánh còn lại tại vị trí xmm dọc thanh (0 ngoài vùng bẻ, tuyến tính trong đoạn chuyển tiếp)."""
+    xmm = np.atleast_1d(np.asarray(xmm, float))
+    th = np.zeros_like(xmm)
+    for bd in m.get("bends", []):
+        t0 = np.radians(bd["theta_deg"])
+        r = bd["ramp"]
+        f = np.clip(np.minimum((xmm - (bd["x0"] - r)) / r, ((bd["x1"] + r) - xmm) / r), 0, 1)
+        th = np.where(np.abs(f * t0) > np.abs(th), f * t0, th)
+    return th
+
+
 def where_v(m, S, Q, eps=0.0015):
     """Bản véc-tơ của where(): Q (n,3) -> mảng 0/1/2."""
     P1, P2, e1, e2 = frame(m)
@@ -149,8 +161,21 @@ def where_v(m, S, Q, eps=0.0015):
     a = sol[1] + g1
     c = sol[2] + g2
     ok = (x > eps) & (x < L - eps)
+    # cánh còn lại bẻ cục bộ quanh mép lưng: tính lại (a, c) cho điểm trong vùng bẻ với khung đã xoay
+    ab, cb = a.copy(), c.copy()
+    th = bend_theta(m, x * 1000)
+    if np.any(th != 0):
+        H = P1[None, :] + np.outer(sol[0], P2 - P1) - e1 * g1 - e2 * g2
+        v = Q - H
+        uu = u
+        co, si = np.cos(-th), np.sin(-th)
+        # quay ngược v quanh u góc -th (Rodrigues)
+        vr = v * co[:, None] + np.cross(uu, v) * si[:, None] + np.outer(v @ uu, uu) * (1 - co)[:, None]
+        nb = th != 0
+        ab[nb] = (vr @ e1)[nb]
+        cb[nb] = (vr @ e2)[nb]
     in1 = ok & (a > eps) & (a < b - eps) & (c > eps) & (c < t - eps)
-    in2 = ok & (a > eps) & (a < t - eps) & (c > eps) & (c < b - eps)
+    in2 = ok & (ab > eps) & (ab < t - eps) & (cb > eps) & (cb < b - eps)
 
     def cutmask(fl, w):
         r = np.zeros(len(Q), bool)
@@ -166,7 +191,7 @@ def where_v(m, S, Q, eps=0.0015):
                 r |= near & ((fl == "out") | (w < aa * (1 - x0 / bb)))
         return r
     out = np.zeros(len(Q), int)
-    out[in2 & ~cutmask("out", c)] = 2
+    out[in2 & ~cutmask("out", cb)] = 2
     out[in1 & ~cutmask("conn", a)] = 1
     return out
 
@@ -187,7 +212,11 @@ def samples(m, S, step=0.01):
                 if not cut_removed(m, x, L, "conn", w, b):
                     pts.append(base + e1 * (w - g1) + e2 * (c - g2))
                 if not cut_removed(m, x, L, "out", w, b):
-                    pts.append(base + e1 * (c - g1) + e2 * (w - g2))
+                    th = float(bend_theta(m, x * 1000)[0]) if m.get("bends") else 0.0
+                    v = e1 * c + e2 * w
+                    if th:
+                        v = v * np.cos(th) + np.cross(u, v) * np.sin(th) + u * np.dot(u, v) * (1 - np.cos(th))
+                    pts.append(base - e1 * g1 - e2 * g2 + v)
     return np.array(pts)
 
 
