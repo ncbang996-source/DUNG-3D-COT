@@ -65,6 +65,23 @@
     <div id="measureOut" class="muted">Bật "Đo khoảng cách" rồi nhấn 2 điểm trên mô hình (tự bắt vào đỉnh/góc gần nhất). Phím M bật/tắt, Esc xóa.</div>
   </section>
 
+  <section id="fbSec">
+    <h2>Góp ý</h2>
+    <div class="row">
+      <button id="btnFb">Thêm góp ý</button>
+      <button id="btnFbExport">Tải file góp ý</button>
+      <label class="filebtn">Mở file góp ý<input type="file" id="fbImport" accept=".json" hidden></label>
+    </div>
+    <div id="fbForm" hidden>
+      <div id="fbTarget" class="muted"></div>
+      <textarea id="fbText" rows="4" placeholder="Nội dung góp ý (VD: thanh này phải nằm trong, bu lông chưa đủ khoảng cách tới mép...)"></textarea>
+      <div class="row"><button id="fbSave">Lưu góp ý</button><button id="fbCancel">Hủy</button></div>
+    </div>
+    <ol id="fbList"></ol>
+    <div id="fbHint" class="muted">Bật "Thêm góp ý" (phím G) rồi nhấn vào đúng chỗ trên mô hình: app tự ghi thanh/bản mã/bu
+      lông, tọa độ, góc nhìn và ảnh chụp. Xong nhấn "Tải file góp ý" và gửi file .json đó.</div>
+  </section>
+
   <section>
     <h2>Xuất</h2>
     <div class="row">

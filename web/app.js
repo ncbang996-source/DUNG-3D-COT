@@ -434,7 +434,7 @@ function showPlate(k) {
   $('iId').textContent = '';
   $('info').querySelector('h2').firstChild.textContent = 'Bản mã ';
   const rows = [
-    ['Loại', pl.kind === 'filler' ? 'Tấm đệm 45×45 nút giao chữ X' : pl.on_leg ? 'Bản mã áp cánh thanh cánh' : 'Bản mã'],
+    ['Loại', pl.kind === 'filler' ? 'Tấm đệm' : pl.on_leg ? 'Bản mã áp cánh thanh cánh' : 'Bản mã'],
     ['Lý do', pl.reason || ''],
     ...(pl.leg_bolts ? [['Bu lông bắt thanh cánh', `${pl.leg_bolts} × M${pl.d_max_mm}`]] : []),
     ['Chiều dày', pl.t_mm + ' mm'], ['Diện tích', fmt(pl.area_m2 * 1e4, 0) + ' cm²'],
@@ -476,6 +476,7 @@ scene.add(measureGroup);
 const measure = { on: false, pts: [] };
 function setMeasure(on) {
   measure.on = on;
+  if (on && typeof fb !== 'undefined' && fb.on) setFb(false);
   $('btnMeasure').textContent = on ? 'Đang đo… (nhấn để tắt)' : 'Đo khoảng cách';
   renderer.domElement.style.cursor = on ? 'crosshair' : '';
 }
@@ -534,6 +535,7 @@ function addMeasurePoint(p, snapped) {
 $('btnMeasure').addEventListener('click', () => setMeasure(!measure.on));
 $('btnMeasureClear').addEventListener('click', clearMeasure);
 window.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
   if (e.key === 'm' || e.key === 'M') setMeasure(!measure.on);
   if (e.key === 'Escape') clearMeasure();
 });
@@ -555,6 +557,156 @@ function drawSection(m) {
     <text x="${X(0) + 4}" y="${pad - 8}" fill="${c}" font-size="10">● đường tim DXF (đỏ) · ○ trọng tâm</text>`;
 }
 
+// ---------------------------------------------------------------- góp ý (ghim lên mô hình, xuất file .json)
+const fbGroup = new THREE.Group();
+scene.add(fbGroup);
+const fb = { on: false, items: [], draft: null };
+const FACE_NAMES = ['mặt trước (Y−)', 'mặt phải (X+)', 'mặt sau (Y+)', 'mặt trái (X−)'];
+function fbKey() { return 'gopy:' + (DATA && DATA.title || 'mo-hinh'); }
+function fbSaveLocal() {
+  try { localStorage.setItem(fbKey(), JSON.stringify(fb.items)); } catch (e) { /* trình duyệt chặn lưu: bỏ qua */ }
+}
+function fbLoadLocal() {
+  try { const t = localStorage.getItem(fbKey()); if (t) fb.items = JSON.parse(t); } catch (e) { fb.items = []; }
+}
+function setFb(on) {
+  fb.on = on;
+  if (on && measure.on) setMeasure(false);
+  $('btnFb').textContent = on ? 'Nhấn vào mô hình… (nhấn để tắt)' : 'Thêm góp ý';
+  renderer.domElement.style.cursor = on ? 'cell' : '';
+}
+function faceOf(p) {
+  const [x, y] = p;
+  return Math.abs(y) >= Math.abs(x) ? (y < 0 ? 0 : 2) : (x > 0 ? 1 : 3);
+}
+// thông tin đối tượng tại chỗ nhấn
+function fbTarget(hit) {
+  const o = hit.object;
+  if (o.userData.bolts && hit.instanceId !== undefined) {
+    const b = DATA.bolts[hit.instanceId];
+    return { kind: 'bu lông', index: hit.instanceId, d_mm: b.d_mm, L_mm: b.L_mm, grip_mm: b.grip_mm, loai: b.kind,
+             text: `Bu lông M${b.d_mm}${b.L_mm ? ' L' + b.L_mm : ''} (${b.kind || ''})` };
+  }
+  if (o.userData.plate !== undefined) {
+    const pl = DATA.plates[o.userData.plate];
+    return { kind: pl.kind === 'filler' ? 'tấm đệm' : 'bản mã', index: o.userData.plate, t_mm: pl.t_mm, reason: pl.reason,
+             text: `${pl.kind === 'filler' ? 'Tấm đệm' : 'Bản mã'} d${pl.t_mm}: ${pl.reason || ''}` };
+  }
+  const m = byId.get(o.userData.id);
+  if (!m) return { kind: 'khác', text: '—' };
+  const side = m.rule === 'leg' ? 'thanh cánh' : (m.side || '');
+  return { kind: 'thanh', id: m.id, section: m.section, side, rule: m.rule, plan: m.plan || null, face_k: m.face_k,
+           length_m: m.length, text: `Thanh số ${m.id}: ${m.section} ${side}${m.plan ? ' (mặt cắt ' + m.plan + ')' : ''}` };
+}
+function fbMarker(item) {
+  const p = new THREE.Vector3(...item.point_m);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe8590c, depthTest: false }));
+  dot.position.copy(p); dot.renderOrder = 10;
+  const el = document.createElement('div'); el.className = 'lbl fb'; el.textContent = item.no;
+  const lab = new CSS2DObject(el); lab.position.copy(p);
+  dot.userData.fbNo = item.no; lab.userData.fbNo = item.no;
+  fbGroup.add(dot, lab);
+}
+function fbRedrawMarkers() {
+  while (fbGroup.children.length) { const o = fbGroup.children.pop(); if (o.element) o.element.remove(); }
+  fb.items.forEach(fbMarker);
+  requestRender();
+}
+function fbRenderList() {
+  $('fbList').innerHTML = fb.items.map((it) =>
+    `<li data-no="${it.no}"><b>${it.no}.</b> ${it.text.replace(/</g, '&lt;')}<br><span class="fbmeta">${it.target.text}` +
+    ` · ${it.face} · cao độ ${Math.round(it.point_mm[2])} mm</span><button data-del="${it.no}">Xóa</button></li>`).join('');
+}
+function fbSnapshot() {
+  // ảnh nhỏ (JPEG) của khung nhìn hiện tại kèm ghim
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+  const src = renderer.domElement, W = 640, H = Math.round(W * src.height / src.width);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0, W, H);
+  if (fb.draft) {               // vẽ số ghim lên ảnh (nhãn HTML không có trong ảnh WebGL)
+    const v = new THREE.Vector3(...fb.draft.point_m).project(camera);
+    const x = (v.x + 1) / 2 * W, y = (1 - v.y) / 2 * H;
+    g.fillStyle = '#e8590c'; g.beginPath(); g.arc(x, y, 11, 0, 2 * Math.PI); g.fill();
+    g.fillStyle = '#fff'; g.font = 'bold 13px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(fb.draft.no), x, y);
+  }
+  try { return c.toDataURL('image/jpeg', 0.75); } catch (e) { return null; }
+}
+function fbStart(hit, ev) {
+  const sp = snapPoint(hit, ev);
+  const p = sp.p.toArray();
+  const no = (fb.items.reduce((a, it) => Math.max(a, it.no), 0)) + 1;
+  fb.draft = {
+    no, text: '', time: new Date().toISOString(), model: DATA.title || '',
+    target: fbTarget(hit), point_m: p.map((v) => +v.toFixed(4)), point_mm: p.map((v) => Math.round(v * 1000)),
+    face: FACE_NAMES[faceOf(p)],
+    camera: { position: camera.position.toArray().map((v) => +v.toFixed(4)), target: controls.target.toArray().map((v) => +v.toFixed(4)) },
+  };
+  fbMarker(fb.draft);
+  requestRender();
+  fb.draft.image = fbSnapshot();
+  $('fbTarget').innerHTML = `Góp ý <b>${no}</b>: ${fb.draft.target.text}<br>${fb.draft.face} · tọa độ (${fb.draft.point_mm.join(', ')}) mm`;
+  $('fbForm').hidden = false;
+  $('fbText').value = '';
+  $('fbText').focus();
+  setFb(false);
+}
+function fbCancel() {
+  fb.draft = null; $('fbForm').hidden = true; fbRedrawMarkers();
+}
+$('btnFb').addEventListener('click', () => setFb(!fb.on));
+$('fbCancel').addEventListener('click', fbCancel);
+$('fbSave').addEventListener('click', () => {
+  if (!fb.draft) return;
+  fb.draft.text = $('fbText').value.trim() || '(không ghi nội dung)';
+  fb.items.push(fb.draft); fb.draft = null;
+  $('fbForm').hidden = true;
+  fbSaveLocal(); fbRenderList(); fbRedrawMarkers();
+});
+$('fbList').addEventListener('click', (e) => {
+  const del = e.target.getAttribute && e.target.getAttribute('data-del');
+  if (del) {
+    if (!confirm('Xóa góp ý ' + del + '?')) return;
+    fb.items = fb.items.filter((it) => it.no !== +del);
+    fbSaveLocal(); fbRenderList(); fbRedrawMarkers(); return;
+  }
+  const li = e.target.closest && e.target.closest('li');
+  if (!li) return;
+  const it = fb.items.find((x) => x.no === +li.dataset.no);
+  if (!it) return;
+  camera.position.set(...it.camera.position); controls.target.set(...it.camera.target); controls.update();
+  if (it.target.kind === 'thanh') select(it.target.id);
+  requestRender();
+});
+$('btnFbExport').addEventListener('click', () => {
+  if (!fb.items.length) { alert('Chưa có góp ý nào.'); return; }
+  const data = { app: 'dung-3d-cot', model: DATA.title || '', exported: new Date().toISOString(), items: fb.items };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+  const d = new Date(), pad = (n) => String(n).padStart(2, '0');
+  const tag = ((DATA.title || '').match(/[A-Z]{2}-\d+/) || ['mo_hinh'])[0];   // tên file chỉ dùng chữ không dấu
+  a.download = `gop_y_${tag}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('fbImport').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const items = data.items || [];
+    const base = fb.items.reduce((a, it) => Math.max(a, it.no), 0);
+    for (const it of items) { if (fb.items.some((x) => x.time === it.time && x.text === it.text)) continue; fb.items.push({ ...it, no: base + it.no }); }
+    fbSaveLocal(); fbRenderList(); fbRedrawMarkers();
+  } catch (err) { alert('Không đọc được file góp ý: ' + err.message); }
+  e.target.value = '';
+});
+window.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
+  if (e.key === 'g' || e.key === 'G') setFb(!fb.on);
+});
+
 // ---------------------------------------------------------------- picking
 const ray = new THREE.Raycaster();
 const ptr = new THREE.Vector2();
@@ -571,6 +723,10 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const hit = ray.intersectObjects(objs)[0];
   if (measure.on) {
     if (hit) { const sp = snapPoint(hit, e); addMeasurePoint(sp.p, sp.snapped); }
+    return;
+  }
+  if (fb.on) {
+    if (hit) fbStart(hit, e);
     return;
   }
   if (hit && hit.object.userData.bolts && hit.instanceId !== undefined) { select(null); showBolt(hit.instanceId); return; }
@@ -717,6 +873,7 @@ async function load() {
     `cấn: ${(ori.clash_other || []).length} cặp, chồng mép cùng mặt phẳng: ${(ori.clash_coplanar_overlap || []).length} cặp.</span>`;
   refreshMaterials();
   updateOvCount();
+  fbLoadLocal(); fbRenderList(); fbRedrawMarkers();
   window.__ready = true;
 }
 
@@ -735,4 +892,5 @@ function requestRender() {
 }
 
 // cho kiểm thử tự động
-window.__app = { select, state, meshes, byId: () => byId, camera, controls, requestRender, addMeasurePoint, setMeasure };
+window.__app = { select, state, meshes, byId: () => byId, camera, controls, requestRender, addMeasurePoint, setMeasure,
+  fb, setFb };

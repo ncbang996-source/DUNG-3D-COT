@@ -7,8 +7,11 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
 - Số liệu lấy **chính xác từ DXF** (toạ độ, hình chi tiết, nhãn), không "gần đúng". Phần phải suy luận thì ghi rõ là suy luận.
 - Mô hình phải **không chạm thép** (thép–thép, bản mã–thép), bu lông xuyên đúng các lớp thép. Chạy kiểm tra trước khi báo xong.
 - Khi nhắc ảnh người dùng gửi: gọi theo thứ tự trong tin nhắn + mô tả nội dung, không dùng tên file nội bộ.
-- Góp ý thường gửi dạng file `cmt.docx` (đoạn chữ + ảnh). Giải nén: `unzip` rồi ghép đoạn văn với `word/media/imageN.png`
-  qua `word/_rels/document.xml.rels`.
+- Góp ý ưu tiên dạng **file `gop_y_*.json` xuất từ app** (nút "Góp ý" trong file HTML: ghim lên mô hình, tự ghi số thanh /
+  bản mã / bu lông, tọa độ mm, mặt, góc nhìn, ảnh). Đọc: `python3 tools/bvtc/read_feedback.py <file.json> <thư mục ảnh>`
+  (in từng ý + tách ảnh + in góc nhìn cho `tools/shot.mjs` để chụp lại sau khi sửa). Số thanh trong file = `id` trong scene.
+- Góp ý dạng `cmt.docx` (đoạn chữ + ảnh): `unzip`, ghép đoạn văn với `word/media/imageN.png` qua
+  `word/_rels/document.xml.rels`.
 - Báo kết quả: nêu cái đã sửa theo từng ý góp ý, số liệu đo được, cái còn suy luận/đề xuất cần xác nhận.
 - Xong việc: commit + push lên `main` (người dùng làm trên `main`), gửi file `dist/*.html`.
 

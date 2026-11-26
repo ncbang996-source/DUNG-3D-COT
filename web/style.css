@@ -44,3 +44,13 @@ dialog td:first-child, dialog th:first-child { text-align: left; }
 .fatal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   text-align: center; padding: 24px; line-height: 1.6; color: var(--fg); }
 #view { overflow: hidden; }
+#fbText { width: 100%; font: inherit; margin: 4px 0; padding: 4px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); color: var(--fg); }
+#fbList { padding-left: 20px; margin: 6px 0; }
+#fbList li { margin: 4px 0; cursor: pointer; }
+#fbList li .fbmeta { color: var(--muted); font-size: 12px; }
+#fbList li button { padding: 0 6px; margin-left: 4px; font-size: 11px; }
+.filebtn { display: inline-block; margin: 0; padding: 4px 9px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--bg); cursor: pointer; }
+.filebtn:hover { border-color: var(--accent); }
+.lbl.fb { color: #fff; background: #e8590c; font-weight: 600; padding: 0 5px; border-radius: 8px; }
