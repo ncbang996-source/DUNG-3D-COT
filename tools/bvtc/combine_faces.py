@@ -7,6 +7,10 @@ từ B các mặt của B (1, 3). Thanh cánh, thép góc nối, mặt cắt vá
 """
 import json
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+import dt02 as T  # noqa: E402
 
 
 def main(a_path, b_path, out_path):
@@ -29,11 +33,27 @@ def main(a_path, b_path, out_path):
         m["id"] = i
     plates = pick(A["plates"], fa, True) + pick(B["plates"], fb, False)
     bolts = pick(A["bolts"], fa, True) + pick(B["bolts"], fb, False)
+    # vát góc cột (đề xuất) mỗi lần dựng tính với mặt kề là chính mặt đó xoay 90 độ; sau khi ghép tính lại với mặt kề
+    # thật (góp ý: mặt không cấn gì thì không vát)
+    secs0 = dict(A["sections"])
+    secs0.update(B["sections"])
+    tag = "tránh chạm thanh mặt kề tại góc cột"
+    n_old = 0
+    for m in members:
+        for ck in ("cut1", "cut2"):
+            if tag in (m.get(ck) or {}).get("note", ""):
+                m.pop(ck)
+                n_old += 1
+    T.LIB.update(secs0)
+    rep_cf = {"clash_fix": [], "warnings": []}
+    T.corner_fix(members, T.LIB, rep_cf)
+    n_new = sum(1 for m in members for ck in ("cut1", "cut2") if tag in (m.get(ck) or {}).get("note", ""))
+    print("vát góc cột: trước %d đầu thanh, sau ghép mặt %d" % (n_old, n_new))
     secs = dict(A["sections"])
     secs.update(B["sections"])
     for k, v in A["sections"].items():
         secs[k] = v
-    rep = {"mat_A": A["report"]["build"], "mat_B": B["report"]["build"], "faces_A": sorted(fa), "faces_B": sorted(fb),
+    rep = {"vat_goc_cot_sau_ghep": rep_cf, "mat_A": A["report"]["build"], "mat_B": B["report"]["build"], "faces_A": sorted(fa), "faces_B": sorted(fb),
            "z_range_m": A["report"]["build"].get("z_range_m")}
     title = A["title"].replace("Đoạn thân", "Đoạn ngọn")
     out = {"title": title, "members": members, "sections": secs, "nodes": [], "plates": plates, "bolts": bolts,

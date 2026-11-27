@@ -51,15 +51,20 @@ def main(dxf, sheet, scene_in, scene_out):
         T.R.assign_labels(pm, T.R.text_labels(msp, box), None)
         diags = [m for m in pm if m["width"] < 120 and 20 < m["ang"] % 180 < 160 and abs(m["ang"] % 180 - 90) > 20]
         ins = lambda p: box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3]
-        b16 = [(e.dxf.insert[0], e.dxf.insert[1]) for e in msp.query("INSERT") if e.dxf.name == "1" and ins(e.dxf.insert)]
+        # bu lông vách (khối 1/2/3 = M16/M20/M24; DN-01 vách 1-1 dùng M20)
+        bins = [((e.dxf.insert[0], e.dxf.insert[1]), {"1": 16, "2": 20, "3": 24}[e.dxf.name]) for e in msp.query("INSERT")
+                if e.dxf.name in ("1", "2", "3") and ins(e.dxf.insert)]
         dsym = [(e.dxf.insert[0], e.dxf.insert[1]) for e in msp.query("INSERT") if e.dxf.name == "D" and ins(e.dxf.insert)]
         dl = None
         for t_ in msp.query("TEXT"):
             mt = re.fullmatch(r"(\d*)D\.(\d+)_(\d+)", t_.dxf.text.strip())
             if mt and ins(t_.dxf.insert):
                 dl = (int(mt.group(1) or 1), float(mt.group(3)))
-        blab = [int(t_.dxf.text.strip().split("_")[1]) for t_ in msp.query("TEXT")
-                if re.fullmatch(r"1\.16_\d+", t_.dxf.text.strip()) and ins(t_.dxf.insert)]
+        blab = {}
+        for t_ in msp.query("TEXT"):
+            mt = re.fullmatch(r"1\.(\d+)_(\d+)", t_.dxf.text.strip())
+            if mt and ins(t_.dxf.insert):
+                blab.setdefault(int(mt.group(1)), []).append(int(mt.group(2)))
         # tâm vách = giao 2 đường tâm thanh chéo
         a, b = diags[0], diags[1]
         cen = T.inter(a["c1"], a["c2"], b["c1"], b["c2"])
@@ -71,9 +76,9 @@ def main(dxf, sheet, scene_in, scene_out):
             c1, c2 = loc(d["c1"]), loc(d["c2"])
             u = (c2 - c1) / np.linalg.norm(c2 - c1)
             nrm = np.array([-u[1], u[0]])
-            on = [loc(q) for q in b16 if abs(np.dot(loc(q) - c1, nrm)) < 0.008]
-            ends = sorted(on, key=lambda q: np.dot(q - c1, u))
-            e1b, e2b = ends[0], ends[-1]
+            on = [(loc(q), d_) for q, d_ in bins if abs(np.dot(loc(q) - c1, nrm)) < 0.008]
+            ends = sorted(on, key=lambda q: np.dot(q[0] - c1, u))
+            (e1b, d1b), (e2b, d2b) = ends[0], ends[-1]
             up = d["vis"] == "S"
             zr = []
             hid = []
@@ -92,8 +97,8 @@ def main(dxf, sheet, scene_in, scene_out):
             S[secn] = sct
             tt = sct["t"] / 1000
             g = d.get("heel_to_center") or sct["b"] / 2
-            P1 = np.array([*(e1b - u * ED[16] / 1000), zr[0][1] if up else zr[0][0]])
-            P2 = np.array([*(e2b + u * ED[16] / 1000), zr[1][1] if up else zr[1][0]])
+            P1 = np.array([*(e1b - u * ED[d1b] / 1000), zr[0][1] if up else zr[0][0]])
+            P2 = np.array([*(e2b + u * ED[d2b] / 1000), zr[1][1] if up else zr[1][0]])
             u3 = (P2 - P1) / np.linalg.norm(P2 - P1)
             e1 = np.array([nrm[0], nrm[1], 0.0])
             e2 = np.array([0, 0, 1.0 if up else -1.0])
@@ -107,12 +112,12 @@ def main(dxf, sheet, scene_in, scene_out):
                  "host_ids": hid, "mass_kg": round(sct["A_geom_cm2"] * 1e-4 * float(np.linalg.norm(P2 - P1)) * 7850, 3)}
             s["members"].append(m)
             made.append(m)
-            Lb = min(blab) if blab else 40
-            for eb, (zb, zt) in zip((e1b, e2b), zr):
+            for eb, db_, (zb, zt) in zip((e1b, e2b), (d1b, d2b), zr):
+                Lb = min(blab.get(db_, [40]))
                 bot = zb - (0 if up else tt)
                 top = zt + (tt if up else 0)
                 s["bolts"].append({"id": 0, "p": [round(float(eb[0]), 5), round(float(eb[1]), 5), round(bot, 5)],
-                                   "axis": [0, 0, 1.0], "nut": [0, 0, 1.0], "d_mm": 16,
+                                   "axis": [0, 0, 1.0], "nut": [0, 0, 1.0], "d_mm": db_,
                                    "grip_mm": round((top - bot) * 1000, 1), "L_mm": Lb, "L_from": "ký hiệu bản vẽ",
                                    "t_mm": 8, "kind": "plan"})
         # bu lông + tấm đệm ở tâm
@@ -137,9 +142,10 @@ def main(dxf, sheet, scene_in, scene_out):
         tlo = S[lo_m["section"]]["t"] / 1000
         thi = S[hi_m["section"]]["t"] / 1000
         bot, top = zc_lo - tlo, zc_hi + thi
-        Lc = max(blab) if blab else 50
+        dc_ = min(bins, key=lambda b_: math.dist(b_[0], cen))[1]
+        Lc = max(blab.get(dc_, [50]))
         s["bolts"].append({"id": 0, "p": [0.0, 0.0, round(bot, 5)], "axis": [0, 0, 1.0], "nut": [0, 0, 1.0],
-                           "d_mm": 16, "grip_mm": round((top - bot) * 1000, 1), "L_mm": Lc, "L_from": "ký hiệu bản vẽ",
+                           "d_mm": dc_, "grip_mm": round((top - bot) * 1000, 1), "L_mm": Lc, "L_from": "ký hiệu bản vẽ",
                            "t_mm": 8, "kind": "plan"})
         rep[pname] = {"z_mm": zlev[pname], "khe_tam_mm": round(gap, 1), "tam_dem": f"{nf} x {tf:g}",
                       "ep_mm": round(gap - nf * tf, 1),
@@ -149,34 +155,73 @@ def main(dxf, sheet, scene_in, scene_out):
     faces = [m for m in s["members"] if m["rule"] in ("face", "leg")]
     fixes = []
 
-    def hits(m, others):
+    GAP = 0.010     # góp ý (người dùng chốt): khe tối thiểu 10 mm với thép khác (trừ thanh chủ thanh vách tựa lên)
+
+    def hits(m, others, gap=GAP):
         sp = CK.samples(m, S)
         for o in others:
-            if len(sp) and np.any(CK.where_v(o, S, sp, 0.001) > 0):
+            e_ = 0.001 if o["id"] in m["host_ids"] else -gap
+            if len(sp) and np.any(CK.where_v(o, S, sp, e_) > 0):
                 return True
             so = CK.samples(o, S)
-            if len(so) and np.any(CK.where_v(m, S, so, 0.001) > 0):
+            if len(so) and np.any(CK.where_v(m, S, so, e_) > 0):
                 return True
         return False
+    pec = T.CFG.get("plan_end_cut", {})
     for m in [x for x in s["members"] if x["rule"] == "plan"]:
         for key, ck in (("p1", "cut1"), ("p2", "cut2")):
             P_ = np.array(m[key])
             near = [o for o in faces if CK.seg_dist(P_, P_ + 1e-6, *CK.frame(o)[:2]) < 0.3]
+            n_ = pec.get(m["plan"])
+            if n_:
+                # vát ghi trên mặt cắt (VD DN-01 1-1 "vát cánh 20x20mm", 2-2 "60x60mm", mũi tên chỉ đầu thanh chéo ở
+                # góc vách): chọn góc vát (mép cánh nằm / góc lưng / cánh đứng) gỡ được chạm, ưu tiên đạt khe 10 mm
+                done = None
+                for gap_ in (GAP, 0.0):
+                    for fl_ in ("conn", "heel", "out"):
+                        m[ck] = {"flange": fl_, "a": n_, "b": n_}
+                        if not hits(m, near, gap_):
+                            done = (fl_, gap_)
+                            break
+                    if done:
+                        break
+                if done:
+                    m[ck]["note"] = "vát cánh %dx%dmm theo mặt cắt %s (%s)" % (
+                        n_, n_, m["plan"], {"conn": "góc mép cánh nằm", "heel": "góc lưng",
+                                            "out": "góc mép cánh đứng"}[done[0]])
+                    fixes.append({"plan": m["plan"], "side": m["side"], "vat_mm": f"{n_}x{n_} (bản vẽ, {done[0]})",
+                                  "khe_min_mm": round(done[1] * 1000)})
+                    continue
+                m.pop(ck, None)
             if not hits(m, near):
                 continue
             best = None
-            for A_ in range(10, 65, 5):
-                for B_ in range(10, 260, 5):
-                    if best and A_ * B_ >= best[0]:
-                        break
-                    m[ck] = {"flange": "out", "a": A_, "b": B_}
-                    if not hits(m, near):
-                        best = (A_ * B_, A_, B_)
-                        break
+            # khe mục tiêu 10 mm; không đạt (cánh nằm thanh vách cũng sát thép bên dưới) thì lấy khe lớn nhất đạt được
+            for gap_ in (GAP, 0.008, 0.006, 0.005, 0.004, 0.003, 0.002, 0.0):
+                for fl_ in ("out", "conn", "heel"):
+                    amax = 25 if fl_ == "heel" else 55          # góc lưng: không cắt tới lỗ bu lông (đường đinh 35)
+                    bmax = 150 if fl_ == "heel" else 395          # góc lưng: cánh còn lại lùi đúng b
+                    m[ck] = {"flange": fl_, "a": amax, "b": bmax}
+                    if hits(m, near, gap_):
+                        continue                   # vát tối đa cũng không đạt khe này
+                    for A_ in range(10, amax + 5, 5):
+                        for B_ in range(10, bmax + 5, 5):
+                            if best and A_ * B_ >= best[0]:
+                                break
+                            m[ck] = {"flange": fl_, "a": A_, "b": B_}
+                            if not hits(m, near, gap_):
+                                best = (A_ * B_, A_, B_, gap_, fl_)
+                                break
+                if best:
+                    break
             if best:
-                m[ck] = {"flange": "out", "a": best[1], "b": best[2],
-                         "note": "vát góc cánh còn lại %dx%dmm (ĐỀ XUẤT - tránh chạm thanh mặt cột ở góc vách)" % best[1:]}
-                fixes.append({"plan": m["plan"], "side": m["side"], "vat_mm": f"{best[1]}x{best[2]}"})
+                m[ck] = {"flange": best[4], "a": best[1], "b": best[2],
+                         "note": "vát góc %s %dx%dmm (ĐỀ XUẤT - khe >= %d mm với thép quanh góc vách)"
+                                 % ({"out": "cánh còn lại", "conn": "mép cánh nằm", "heel": "lưng"}[best[4]],
+                                    best[1], best[2],
+                                    round(best[3] * 1000))}
+                fixes.append({"plan": m["plan"], "side": m["side"], "vat_mm": f"{best[1]}x{best[2]} ({best[4]})",
+                              "khe_min_mm": round(best[3] * 1000)})
             else:
                 m.pop(ck, None)
                 fixes.append({"plan": m["plan"], "side": m["side"], "loi": "không gỡ được"})

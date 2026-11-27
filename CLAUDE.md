@@ -17,7 +17,7 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
 
 ## Dữ liệu
 - `data/n122/BVTC_COT_N122-3230.dxf` — bản vẽ chế tạo cột N122 (mọi tờ trong 1 file, toạ độ DXF, tỉ lệ 1/25,
-  chi tiết 1/10). Tờ: DT-02, DT-01, DN-02 (đã dựng), DN-01 (chưa).
+  chi tiết 1/10). Tờ: DT-02, DT-01, DN-02, DN-01 (đã dựng; DN-01 chỉ ghép vào cột, không xuất riêng).
 - `data/NC111-32.dxf` + PDF — dự án đầu (cột NC111-32 dựng từ 3DLINE), app gốc `web/`, `src/`.
 
 ## Chương trình
@@ -25,9 +25,12 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
   sườn chân cột, đặc thù tờ). Thêm tờ mới = thêm mục `SHEETS` rồi chạy, xem báo cáo `report.build`.
 - `tools/bvtc/bvtc_read.py` — đọc mặt đứng 2D thành thanh (nét mép, đường tâm, nét chiều dày, nhãn tiết diện).
 - `tools/bvtc/check_dt02.py` — kiểm tra va chạm (khớp đúng hình app dựng: khung lệch, vát, bẻ cánh, bẻ lệch).
-- `tools/bvtc/merge_segments.py` — ghép đoạn trên lên đoạn dưới thành 1 mô hình (khớp bản mã nối + bu lông chung).
+- `tools/bvtc/merge_segments.py` — ghép đoạn trên lên đoạn dưới thành 1 mô hình (khớp bản mã nối + bu lông chung);
+  `--replace-above`: đoạn trên vẽ lặp phần đỉnh đoạn dưới (DN-01 / DN-02) -> thay phần trên mối nối A-A.
 - `tools/bvtc/combine_faces.py`, `tools/bvtc/dn_plans.py` — đoạn 2 kiểu mặt (DN-02): ghép mặt, dựng vách riêng.
-- `tools/bvtc/build_n122.sh` — dựng lại cả cột (DT-02, DT-01, DN-02), ghép, kiểm chạm, đóng gói HTML (~5 phút).
+- `tools/bvtc/build_n122.sh` — dựng lại cả cột (DT-02, DT-01, DN-02, DN-01), ghép, kiểm chạm, đóng gói HTML (~10 phút;
+  chạy 3 tờ song song, mỗi tờ ~1,3 GB bộ nhớ). Cột đủ: `dist/N122_cot_DT-02+DT-01+DN-02+DN-01.html`.
+- `tools/bvtc/brief.py <scene>` — in tóm tắt báo cáo dựng (cảnh báo, gỡ chạm, mặt cắt...).
 - `tools/bvtc/render_regions.py` — cắt vùng DXF ra PNG để xem bản vẽ.
 - `tools/build_standalone.mjs` — đóng gói `web/` + scene JSON thành 1 file HTML (cần `npm install` một lần).
 - `tools/shot.mjs` — chụp mô hình từ HTML theo góc camera.
@@ -68,3 +71,7 @@ Mét; z = 0 tại đầu dưới thanh cánh (mặt trên bản đế); mặt tr
 - DT-01 đặt trên DT-02 (không bản đế); đỉnh DT-01 thanh cánh uốn thẳng đứng, bản mã DN-02 bẻ góc; bu lông đứng xỏ từ dưới lên.
 - DN-02: 2 kiểu mặt (mặt có xà trước/sau); không dựng thanh xà; mối nối B-B lưng HL130x9 lùi 3 mm (tấm d3 ngoài).
 - Chạm còn lại: vát góc (bội 5 mm, vừa đủ); cái bản vẽ không ghi thì ghi "ĐỀ XUẤT" và báo người dùng.
+- 3 thanh giao nhau: ít nhất 1 thanh chạy thẳng (DT-02 nút giữa: thanh xiên dừng ở bản mã -> thanh ngang liền).
+- Vát góc thanh vách: khe >= 10 mm với thép quanh góc (trừ thanh chủ). Vát góc cột tính lại sau khi ghép 2 kiểu mặt.
+- Phần xà dựng sau: bỏ thanh xiên/chống của xà; giữ thanh ngang mặt cột đủ dài + bản mã có tai (lỗ chờ).
+- DN-01 thay phần trùng trên mối nối A-A của DN-02, trừ thanh 214 (L80x6) và 234 (L70x6) giữ theo DN-02.

@@ -269,7 +269,7 @@ def samples(m, S, step=0.01):
         V = V * co + np.cross(u, V) * si + np.outer(V @ u, u) * (1 - co)
     P_out = (H + V)[keep2]
     res = np.concatenate([P_conn, P_out]) if len(P_conn) + len(P_out) else np.zeros((0, 3))
-    if len(_SAMPLE_CACHE) > 5000:
+    if len(_SAMPLE_CACHE) > 600:          # mỗi mục vài MB: giới hạn để chạy nhiều tờ song song không hết bộ nhớ
         _SAMPLE_CACHE.clear()
     _SAMPLE_CACHE[key] = res
     return res

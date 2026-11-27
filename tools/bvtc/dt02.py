@@ -90,7 +90,8 @@ SHEETS = {
     #   DN-02  = mặt có xà (trước/sau, k = 0, 2): L90x7 dài 2840 + L60x5 chống; bỏ L70x6 nghiêng của xà (vẽ cụt)
     #   DN-02s = mặt bên (k = 1, 3)
     # z = 0 tại đường gãy thanh cánh (đầu dưới phần đứng DT-01). Thanh cánh DN-02 HL130x9 (232) từ khe B-B
-    # (860 trên đường gãy) tới khe A-A (6240), HL130x9 (203) từ A-A tới đỉnh; dưới B-B là phần đứng DT-01
+    # (860 trên đường gãy) tới khe A-A (6260, đo trên DXF: khe 6255..6265; trước ghi 6240 lệch 20 mm so với bu lông và
+    # bản nối vẽ - phát hiện khi ráp DN-01), HL130x9 (203) từ A-A tới đỉnh; dưới B-B là phần đứng DT-01
     # (HL150x12 - 301, chữ "HL130x12" ở hình B-B ghi nhầm), lưng thẳng hàng, đường tim cách lưng 80.
     "DN-02": {
         "box": (-2395, -120835, -2195, -120480),
@@ -102,14 +103,54 @@ SHEETS = {
         "faces": [0, 2],
         "drop_rules": [{"sections": ["L70X6", None], "non_horizontal": True}],
         "bottom_stub": {"sheet": "DT-01", "joint_mm": 860.0, "gap": 10.0, "section": "HL150X12"},
-        "leg_splices": [{"z": 6240.0, "gap": 10.0, "inner": "HL120X8", "inner_L": 730.0}],
+        "leg_splices": [{"z": 6260.0, "gap": 10.0, "inner": "HL120X8", "inner_L": 730.0}],
         "waiting_holes": True,
         "detail_hole_max": 15.0,
         "banma_join_gap": 20.0,
         "trim_to_end_lines": True,
     },
 }
+SHEETS["DN-02"]["xa_keep_horizontal"] = True        # góp ý: thanh chống L60x5 của xà dựng khi làm phần xà
 SHEETS["DN-02s"] = dict(SHEETS["DN-02"], box=(-2190, -120835, -2045, -120480), faces=[1, 3])
+# ĐOẠN NGỌN DN-01 (trên cùng). Tờ DN-01 vẽ lặp phần đỉnh DN-02 (từ L90x7 1570 qua mối nối A-A HL120x8 tới L70x6
+# 1710); người dùng chốt: lấy DN-01 thay phần trùng phía trên A-A, trừ thanh ngang L70x6 (234) và thanh xiên L80x6
+# (214) lấy theo DN-02 (đã thống kê ở DN-02) - xem merge_segments.py "replace_above".
+# z = 0 tại đầu dưới thanh cánh vẽ trên tờ DN-01 (1117 dưới mối nối A-A của DN-02, đo trên DXF: khe 1112..1122).
+# Thanh cánh: HL130x9 201/202 (DN-02) từ A-A lên mối nối A-A của DN-01 (khe 5112..5122), trên đó L100x7 tới đỉnh.
+# Mối nối A-A DN-01 (chi tiết 1/10): thép góc nối trong L90x7 dài 550 vát góc 10x10, bản nối ngoài d8 100x530,
+# tấm d2 70x240 (L100x7 mỏng hơn HL130x9 2 mm, 2 thanh thẳng mặt trong như B-B DN-02 -> tấm d2 bù ở lưng L100x7).
+SHEETS["DN-01"] = {
+    "box": (-2395, -120255, -2195, -119850),
+    "plans": {"1-1": (-119879.4, (-2000, -119990, -1870, -119855)),
+              "2-2": (-120003.4, (-1865, -119985, -1735, -119855)),
+              "3-3": (-120059.4, (-1990, -120125, -1860, -119995))},
+    "level_cut": {},
+    # "vát cánh 20x20mm" (1-1), "60x60mm" (2-2): mũi tên chỉ đầu thanh chéo vách ở góc (không phải thanh mặt cột)
+    "plan_end_cut": {"1-1": 20, "2-2": 60},
+    "no_base": True,
+    "faces": [0, 2],
+    "xa_keep_horizontal": True,
+    "leg_section": "HL130X9",
+    "leg_hidden_ok": True,            # đầu trên L100x7 vẽ nét khuất sau bản mã đỉnh (không có đoạn nào phía trên)
+    "bottom_stub": {"sheet": "DN-02", "joint_mm": 1117.0, "gap": 10.0, "section": "HL130X9", "inner": "HL120X8",
+                    "inner_L": 730.0, "plate_L": 690.0, "plate_t": 10, "joint_name": "A-A (DN-02)",
+                    "inner_name": "thép góc nối trong A-A (229, DN-02)",
+                    "stub_name": "thanh cánh 203/204 (DN-02, vẽ để ráp)",
+                    "names": ["thanh cánh 201/202 (DN-02)", "thanh cánh L100x7 (DN-01)"]},
+    "leg_splices": [{"z": 5117.0, "gap": 10.0, "inner": "L90X7", "inner_sec": "L90X7-NOI", "inner_L": 550.0,
+                     "inner_cut": 10.0, "plate_L": 530.0, "plate_t": 8, "above": "L100X7", "name": "A-A (DN-01)",
+                     "inner_name": "thép góc nối trong A-A DN-01 (L90x7 dài 550, vát góc 10x10)",
+                     "shim": {"w": 70.0, "L": 240.0, "t": 2.0,
+                              "note": "tấm d2 70x240 bù chiều dày (lưng L100x7 lùi 2 mm), dưới bản nối ngoài A-A DN-01"}}],
+    "waiting_holes": True,
+    "detail_hole_max": 15.0,
+    "banma_join_gap": 20.0,
+    "trim_to_end_lines": True,
+    # mặt cắt 1-1: thanh ngang đỉnh L70x6 2080 bẻ 2 đầu 300 ra ngoài, dốc 327/1000 (người dùng chốt giữ đủ chiều dài)
+    "top_bend": {"plan": "1-1", "x_mm": 1040.0, "slope": 0.327, "z_m": 8.917,
+                 "note": "2080 + 2 x 300, dốc 327/1000"},
+}
+SHEETS["DN-01s"] = dict(SHEETS["DN-01"], box=(-2190, -120255, -2045, -119850), faces=[1, 3], top_bend=None)
 SHEET = "DT-02"
 CFG = SHEETS[SHEET]
 BOX = CFG["box"]
@@ -164,10 +205,11 @@ LIB = {}
 
 def sec(name):
     if name not in LIB:
-        b, t, r1, r2 = SL.JIS_G3192[SL.base_name(name)]
+        # "L90X7-NOI": tiết diện riêng cho thép góc nối (vát góc lưng) - không đổi hình tiết diện thanh cùng cỡ
+        b, t, r1, r2 = SL.JIS_G3192[SL.base_name(name.split("-")[0])]
         pts = SL.profile(b, t, r1, r2)
         A, cx, cy = SL.poly_props(pts)
-        LIB[name] = {"name": name, "base": SL.base_name(name), "standard": "JIS G3192", "b": b, "t": t,
+        LIB[name] = {"name": name, "base": SL.base_name(name.split("-")[0]), "standard": "JIS G3192", "b": b, "t": t,
                      "r1": r1, "r2": r2, "A_geom_cm2": round(A / 100, 3), "A_pdf_cm2": round(A / 100, 3),
                      "cx": round(cx, 2), "cy": round(cy, 2), "gauge": b / 2,
                      "profile": [[round(x, 3), round(y, 3)] for x, y in pts]}
@@ -367,8 +409,12 @@ def read_dxf_cached(path):
 def read_elevation(doc, msp):
     ms = R.members(doc, msp, BOX)
     segs = R.segments(doc, msp, BOX)
-    wide = [m for m in ms if m["width"] >= 120 and 60 < m["ang"] < 120]
-    braces = [m for m in ms if m["width"] < 120]
+    # thanh cánh: thanh rộng gần đứng; DN-01: đoạn trên là L100x7 (nét lưng chung với HL130x9) -> thanh cánh vẽ
+    # gộp có bề rộng 100..130, nhận cả thanh dài suốt chiều cao khung (CFG "leg_section")
+    hbox = (BOX[3] - BOX[1])
+    wide = [m for m in ms if 60 < m["ang"] < 120 and (m["width"] >= 120 or (
+        CFG.get("leg_section") and m["width"] >= 95 and abs(m["p2"][1] - m["p1"][1]) > 0.8 * hbox))]
+    braces = [m for m in ms if m["width"] < 120 and not any(m is w_ for w_ in wide)]
     # điểm làm việc = giao điểm các cặp đường tâm thanh giằng
     wps = []
     for i, a in enumerate(braces):
@@ -399,8 +445,10 @@ def read_elevation(doc, msp):
         return sum(1 for b_ in braces for p in (b_["c1"], b_["c2"]) if dist_line(p, m["c1"], m["c2"]) < 2.5
                    and min(m["p1"][1], m["p2"][1]) - 2 <= p[1] <= max(m["p1"][1], m["p2"][1]) + 2)
     scored = [(touches(m), m, 0.0, m["c1"], m["c2"]) for m in wide]
-    left = max((x for x in scored if x[1]["ang"] <= 90), key=lambda x: x[0])
-    right = max((x for x in scored if x[1]["ang"] > 90), key=lambda x: x[0])
+    xmid_ = sum((x[1]["c1"][0] + x[1]["c2"][0]) / 2 for x in scored) / len(scored)
+    isleft = lambda m: m["ang"] < 89.9 or (m["ang"] <= 90.1 and (m["c1"][0] + m["c2"][0]) / 2 < xmid_)
+    left = max((x for x in scored if isleft(x[1])), key=lambda x: x[0])
+    right = max((x for x in scored if not isleft(x[1])), key=lambda x: x[0])
     legs = []
     for n_on, m, off, c1, c2 in (left, right):
         g = abs(m["heel_signed"] - off) if m.get("heel_signed") is not None else 80.0
@@ -413,7 +461,7 @@ def read_elevation(doc, msp):
                 continue
             # chỉ nét LIỀN: nét đứt thẳng hàng phía trên/dưới là thanh cánh đoạn kề vẽ tham chiếu (DT-02 đỉnh:
             # thanh cánh DT-01 vẽ nét đứt) - không thuộc đoạn này
-            if sg["k"] != "S":
+            if sg["k"] != "S" and not CFG.get("leg_hidden_ok"):
                 continue
             if all(dist_line(p, c1, c2) <= 170 / SC for p in (sg["a"], sg["b"])):
                 ss += [(p[0] - c1[0]) * ux + (p[1] - c1[1]) * uy for p in (sg["a"], sg["b"])]
@@ -436,7 +484,7 @@ def main(dxf, outdir):
     labs = R.text_labels(msp, BOX)
     R.assign_labels(ms, labs, xc)
     for leg in legs:
-        leg["section"] = leg["m"].get("section") or "HL150X12"
+        leg["section"] = CFG.get("leg_section") or leg["m"].get("section") or "HL150X12"
 
     # chỉ giữ thanh giằng trong thân, có nét thấy (không phải toàn khuất), có tiết diện
     keep, dropped = [], []
@@ -444,12 +492,18 @@ def main(dxf, outdir):
         inside = all(abs(p[0] - xc) * SC <= halfw(p[1]) + 60 for p in (m["c1"], m["c2"]))
         ytop_leg = max(Lg["a"][1], Lg["b"][1], Rg["a"][1], Rg["b"][1])
         above = (m["c1"][1] + m["c2"][1]) / 2 > ytop_leg - 0.5        # thanh của đoạn phía trên vẽ tham chiếu
+        if CFG.get("leg_hidden_ok"):
+            above = False                    # DN-01 là đoạn trên cùng: thanh ngang đỉnh nằm ngang đầu thanh cánh
         drop_ = any((m.get("section") in r_["sections"]) and (not r_.get("non_horizontal") or 3 < m["ang"] % 180 < 177)
                     for r_ in CFG.get("drop_rules", []))
         if CFG.get("bottom_stub") and max(m["c1"][1], m["c2"][1]) < min(Lg["a"][1], Lg["b"][1]) - 0.5:
             drop_ = True                                 # thanh của đoạn dưới vẽ tham chiếu
-        if CFG.get("drop_rules") and not m["all_hidden"] and not drop_ and not inside:
-            inside = m.get("section") is not None           # thanh chìa ra ngoài thân (xà): giữ nếu có nhãn
+        if (CFG.get("drop_rules") or CFG.get("xa_keep_horizontal")) and not m["all_hidden"] and not drop_ \
+                and not inside:
+            # thanh chìa ra ngoài thân (xà): giữ nếu có nhãn; "xa_keep_horizontal" (người dùng chốt: phần xà dựng
+            # sau) chỉ giữ thanh ngang mặt cột (L90x7 2840...), bỏ thanh xiên/chống của xà (L60x5, L70x6)
+            horiz_ = m["ang"] % 180 < 3 or m["ang"] % 180 > 177
+            inside = m.get("section") is not None and (horiz_ or not CFG.get("xa_keep_horizontal"))
         if m["all_hidden"] or not inside or above or drop_:
             dropped.append(m)
             continue
@@ -765,7 +819,15 @@ def main(dxf, outdir):
             pm_ = (m["ref_a"][0] + m["ref_u"][0] * smid, m["ref_a"][1] + m["ref_u"][1] * smid)
             # chỉ tách khi bản mã có bản hàn vuông góc chắn giữa (DT-02: 419); thanh TRONG chạy sau bản mã ngoài
             # cũng bị ngắt nét nhưng vẫn liền (DT-01 nút giữa 1-1)
-            if not any(point_in_poly(pm_, pl["pts"]) and "strip" in pl for pl in plates2d):
+            plk_ = next((pl for pl in plates2d if point_in_poly(pm_, pl["pts"]) and "strip" in pl), None)
+            if plk_ is None:
+                continue
+            # góp ý (người dùng chốt): 3 thanh giao nhau thì ít nhất 1 thanh chạy thẳng. Các thanh xiên đã dừng ở
+            # bản mã này (đầu thanh nằm trong bản mã) -> thanh ngang chạy liên tục, không tách (DT-02 nút giữa)
+            ends_in_ = sum(1 for o in keep if o is not m for q in (o["c1"], o["c2"]) if point_in_poly(q, plk_["pts"]))
+            if ends_in_ >= 2:
+                rep["split_at_plate"].append({"section": m["section"], "khong_tach": "thanh xiên đã dừng ở bản mã "
+                                              "(%d đầu thanh) -> thanh này chạy liên tục" % ends_in_})
                 continue
             P = lambda s_: (m["ref_a"][0] + m["ref_u"][0] * s_, m["ref_a"][1] + m["ref_u"][1] * s_)
             sof = lambda q: (q[0] - m["ref_a"][0]) * m["ref_u"][0] + (q[1] - m["ref_a"][1]) * m["ref_u"][1]
@@ -819,6 +881,27 @@ def main(dxf, outdir):
     # thẳng mặt trong HL130x9 -> lưng lồi ra STUB_OUT = 12 - 9 = 3 mm (bù bằng tấm d3 dưới bản nối ngoài)
     BSTUB = CFG.get("bottom_stub")
     STUB_OUT = (sec(BSTUB["section"])["t"] - tl) if BSTUB else 0.0
+    SPL = CFG.get("leg_splices", [])
+
+    def back_extra(zmm):
+        """Lưng thanh cánh lệch (mm, + ra ngoài) so với lưng thanh cánh chính tại cao độ zmm: các đoạn thanh cánh
+        khác chiều dày ghép THẲNG MẶT TRONG (DN-02 B-B: HL150x12 lồi 3; DN-01 A-A: L100x7 lùi 2, bù tấm d2)."""
+        if BSTUB and zmm < BSTUB["joint_mm"]:
+            return STUB_OUT
+        e_ = 0.0
+        for sp_ in SPL:
+            if sp_.get("above") and zmm > sp_["z"]:
+                e_ = sec(sp_["above"])["t"] - tl
+        return e_
+
+    def leg_sec_at(zmm):
+        if BSTUB and zmm < BSTUB["joint_mm"]:
+            return BSTUB["section"]
+        s_ = Lg["section"]
+        for sp_ in SPL:
+            if sp_.get("above") and zmm > sp_["z"]:
+                s_ = sp_["above"]
+        return s_
     for pl in plates2d:                       # bản mã áp mặt ngoài cánh thanh cánh (A-A) nếu nằm trên thanh cánh
         on_leg_ = any(dist_line(n, L_["w1"], L_["w2"]) < 3.0 for n in pl["nodes"] for L_ in legs)
         pl["delta0"] = gl if on_leg_ else None
@@ -828,12 +911,12 @@ def main(dxf, outdir):
         if BSTUB and on_leg_:
             zc_ = zf(sum(q[1] for q in pl["pts"]) / len(pl["pts"]))
             zlo_ = min(zf(q[1]) for q in pl["pts"])
-            if zlo_ < BSTUB["joint_mm"]:
-                # bản mã trên phần đứng DT-01 / bản nối B-B: áp lưng HL150x12 (lưng lồi ra 3 mm so với HL130x9 vì
-                # 2 thanh cánh thẳng mặt trong) hoặc tấm d3
-                pl["delta0"] = gl + STUB_OUT
-            for sp_ in [dict(z=BSTUB["joint_mm"], L=670.0, t=10)] + [dict(z=x_["z"], L=x_.get("plate_L", 690.0), t=10)
-                                                                     for x_ in CFG.get("leg_splices", [])]:
+            zhi_ = max(zf(q[1]) for q in pl["pts"])
+            # bản mã trên phần đứng DT-01 / bản nối B-B: áp lưng HL150x12 (lưng lồi ra 3 mm so với HL130x9 vì
+            # 2 thanh cánh thẳng mặt trong) hoặc tấm d3; bản qua mối nối áp lưng thanh lồi hơn; trên L100x7: lùi 2
+            pl["delta0"] = gl + max(back_extra(zlo_), back_extra(zhi_))
+            for sp_ in [dict(z=BSTUB["joint_mm"], L=BSTUB.get("plate_L", 670.0), t=BSTUB.get("plate_t", 10))] + \
+                    [dict(z=x_["z"], L=x_.get("plate_L", 690.0), t=x_.get("plate_t", 10)) for x_ in SPL]:
                 if abs(zc_ - sp_["z"]) < 120 and (max(zf(q[1]) for q in pl["pts"]) - zlo_) > sp_["L"] - 60:
                     pl["t"], pl["leg_splice"] = sp_["t"], sp_["z"]
             if zlo_ < -1.0:
@@ -849,17 +932,24 @@ def main(dxf, outdir):
                         t_ = (yk_ - a_[1]) / (b_[1] - a_[1])
                         out_.append((a_[0] + t_ * (b_[0] - a_[0]), yk_))
                 pl["pts"], pl["ext"] = out_, BSTUB["sheet"]
-    if BSTUB:
+    shims_ = []
+    if BSTUB and STUB_OUT > 0:
         # tấm d3 (231, 145x330, chi tiết DN-02) dưới bản nối ngoài B-B, trên lưng HL130x9 (bù 3 mm), từ lưng ra
-        jb = BSTUB["joint_mm"]
-        yz = lambda zmm: min(Lg["a"][1], Lg["b"][1]) + zmm / SC
+        shims_.append((BSTUB["joint_mm"], BSTUB["gap"], 145.0, 330.0, STUB_OUT,
+                       "tấm d3 (231) bù chiều dày, dưới bản nối ngoài B-B"))
+    for sp_ in SPL:
+        if sp_.get("shim"):
+            sh_ = sp_["shim"]
+            shims_.append((sp_["z"], sp_["gap"], sh_["w"], sh_["L"], sh_["t"], sh_["note"]))
+    yz = lambda zmm: min(Lg["a"][1], Lg["b"][1]) + zmm / SC
+    for jb, gap_, w_, Ls_, t_, note_ in shims_:
         for L_ in legs:
             sgn = 1 if L_ is Lg else -1
             xb0 = lambda y_: xline(L_, y_) - sgn * L_["g"] / SC
-            y0_, y1_ = yz(jb + BSTUB["gap"] / 2), yz(jb + BSTUB["gap"] / 2 + 330.0)
-            pts_ = [(xb0(y0_), y0_), (xb0(y0_) + sgn * 145 / SC, y0_), (xb0(y1_) + sgn * 145 / SC, y1_), (xb0(y1_), y1_)]
-            plates2d.append({"pts": pts_, "pts0": pts_, "t": STUB_OUT, "nodes": [], "delta0": gl, "on_leg_fixed": True,
-                             "note": "tấm d3 (231) bù chiều dày, dưới bản nối ngoài B-B", "hidden": True, "d3": True})
+            y0_, y1_ = yz(jb + gap_ / 2), yz(jb + gap_ / 2 + Ls_)
+            pts_ = [(xb0(y0_), y0_), (xb0(y0_) + sgn * w_ / SC, y0_), (xb0(y1_) + sgn * w_ / SC, y1_), (xb0(y1_), y1_)]
+            plates2d.append({"pts": pts_, "pts0": pts_, "t": t_, "nodes": [], "on_leg_fixed": True,
+                             "delta0": gl + back_extra(jb + gap_ / 2 + 1), "note": note_, "hidden": True, "d3": True})
     pt_k = lambda m, k: m["c1"] if k == 0 else m["c2"]
 
     def delta_at(h, p):
@@ -878,6 +968,12 @@ def main(dxf, outdir):
             for k in (0, 1):
                 if m["plate"][k] is pl and not m["out"] and m["delta"][1 - k] is not None and m["plate"][1 - k] is not pl:
                     ds.append(m["delta"][1 - k])
+            # thanh TRONG chạy liên tục qua bản mã (góp ý: thanh ngang DT-02 không cắt ở nút giữa): bản mã áp lưng nó
+            if not m["out"] and m["plate"][0] is not pl and m["plate"][1] is not pl and None not in m["delta"]:
+                cxy_ = (sum(q[0] for q in pl["pts"]) / len(pl["pts"]), sum(q[1] for q in pl["pts"]) / len(pl["pts"]))
+                d_, t_ = dist_seg(cxy_, m["c1"], m["c2"])
+                if d_ * SC < 60 and 0.05 < t_ < 0.95:
+                    ds.append(m["delta"][0] + (m["delta"][1] - m["delta"][0]) * t_)
         return min(ds) if ds else None
 
     # bu lông vẽ (vị trí) để biết đầu thanh có bắt qua cánh thanh cánh không
@@ -945,7 +1041,7 @@ def main(dxf, outdir):
                 elif pl is not None and pl["delta0"] is not None:
                     lo, hi = pl["delta0"], pl["delta0"] + pl["t"]
                 elif kind == "leg":
-                    lo, hi = gl - tl, gl + (STUB_OUT if BSTUB and zf(pk[1]) < BSTUB["joint_mm"] else 0)
+                    lo, hi = gl - tl, gl + back_extra(zf(pk[1]))
                 elif kind == "brace" and h is not None and any(v is not None for v in h["delta"]):
                     db = delta_at(h, pk)
                     lo, hi = sorted((db, db + (h["t_mm"] if h["out"] else -h["t_mm"])))
@@ -963,6 +1059,21 @@ def main(dxf, outdir):
         if m["delta"][1] is None and m["delta"][0] is not None:
             m["delta"][1] = m["delta"][0]
         if m["delta"][0] is None:
+            # thanh chìa qua 2 thanh cánh (thanh ngang xà L90x7 2840, DN-01 3-3): đầu thanh không nằm trên thanh chủ ->
+            # độ sâu theo chỗ cắt thanh cánh: có bản mã trên thanh cánh thì NGOÀI áp mặt ngoài bản mã
+            dd_ = []
+            for L_ in legs:
+                pc_ = inter(m["c1"], m["c2"], L_["w1"], L_["w2"])
+                if pc_ and dist_seg(pc_, m["c1"], m["c2"])[0] < TOL:
+                    pl_ = next((pl for pl in plates2d if pl.get("on_leg_fixed") and point_in_poly(pc_, pl["pts"])), None)
+                    if pl_ is not None and m["out"]:
+                        dd_.append(pl_["delta0"] + pl_["t"])
+                    else:
+                        dd_.append(gl + back_extra(zf(pc_[1])) if m["out"] else gl - tl)
+            if dd_:
+                m["delta"] = [max(dd_) if m["out"] else min(dd_)] * 2
+                rep.setdefault("host_from_leg_crossing", []).append({"section": m["section"], "delta_mm": m["delta"][0]})
+                continue
             m["delta"] = [gl if m["out"] else gl - tl] * 2
             rep["warnings"].append(f"thanh {m['section']} góc {m['ang']:.1f}: không tìm được thanh chủ")
             rep.setdefault("no_host", []).append(m)
@@ -1228,20 +1339,22 @@ def main(dxf, outdir):
         if BSTUB:
             # thanh cánh theo cao độ: phần đứng DT-01 (HL150x12) dưới khe B-B, HL130x9 trên; mối nối B-B / A-A
             on_flange = False
+            zq = zf(q[1])
             for L_ in legs:
                 sgn = 1 if L_ is Lg else -1
                 off = (q[0] - xline(L_, q[1])) * SC * sgn
-                if -L_["g"] + 5 <= off <= sec(L_["section"])["b"] - L_["g"] - 5:
+                if -L_["g"] + 5 <= off <= sec(leg_sec_at(zq))["b"] - L_["g"] - 5:
                     on_flange = True
-            zq = zf(q[1])
             if on_flange and zq >= 0:
                 jb, gb = BSTUB["joint_mm"], BSTUB["gap"] / 2
+                in_gap_ = any(abs(zq - sp_["z"]) <= sp_["gap"] / 2 for sp_ in SPL)
                 if zq < jb - gb:
                     lay.append((gl - tl, gl - tl + sec(BSTUB["section"])["t"], BSTUB["section"] + " (" + BSTUB["sheet"] + ")"))
-                elif zq > jb + gb:
-                    lay.append((gl - tl, gl, Lg["section"]))
-                if abs(zq - jb) < 335:
-                    lay.append((gl - tl - 9, gl - tl, "HL130X9 nối trong B-B"))
+                elif zq > jb + gb and not in_gap_:
+                    lay.append((gl - tl, gl + back_extra(zq), leg_sec_at(zq)))
+                bi_ = BSTUB.get("inner", "HL130X9")
+                if abs(zq - jb) < BSTUB.get("inner_L", 670.0) / 2:
+                    lay.append((gl - tl - sec(bi_)["t"], gl - tl, bi_ + " nối trong " + BSTUB.get("joint_name", "B-B")))
                 for sp_ in CFG.get("leg_splices", []):
                     ti_ = sec(sp_["inner"])["t"]
                     if abs(zq - sp_["z"]) < sp_["inner_L"] / 2:
@@ -1511,20 +1624,26 @@ def main(dxf, outdir):
             cuts_ = [jb] + [sp_["z"] for sp_ in CFG.get("leg_splices", [])]
             gaps_ = [gb] + [sp_["gap"] / 2 for sp_ in CFG.get("leg_splices", [])]
             ztop = zf(max(L_["a"][1], L_["b"][1]))
-            legs_parts = [(Pz(0.0), Pz(jb - gb), "phần đứng thanh cánh %s (301/302, vẽ để ráp)" % BSTUB["sheet"],
+            legs_parts = [(Pz(0.0), Pz(jb - gb), BSTUB.get("stub_name", "phần đứng thanh cánh %s (301/302, vẽ để ráp)"
+                                                           % BSTUB["sheet"]),
                            BSTUB["section"], L_["g"] + STUB_OUT, BSTUB["sheet"])]
-            names_ = ["thanh cánh 203/204", "thanh cánh 201/202"]
+            names_ = BSTUB.get("names", ["thanh cánh 203/204", "thanh cánh 201/202"])
             for i_ in range(len(cuts_)):
                 z0_ = cuts_[i_] + gaps_[i_]
                 z1_ = (cuts_[i_ + 1] - gaps_[i_ + 1]) if i_ + 1 < len(cuts_) else ztop
-                legs_parts.append((Pz(z0_), Pz(z1_), names_[min(i_, 1)], L_["section"], L_["g"], None))
+                zm_ = (z0_ + z1_) / 2
+                legs_parts.append((Pz(z0_), Pz(z1_), names_[min(i_, len(names_) - 1)], leg_sec_at(zm_),
+                                   L_["g"] + back_extra(zm_), None))
             # thép góc nối trong (vát góc lưng 12x12 theo chi tiết)
-            for zc_, Li_, sec_, nm_ in [(jb, 670.0, "HL130X9", "thép góc nối trong B-B (232)")] + \
-                    [(sp_["z"], sp_["inner_L"], sp_["inner"], "thép góc nối trong A-A (229)") for sp_ in CFG.get("leg_splices", [])]:
+            for zc_, Li_, sec_, nm_, cut_ in [(jb, BSTUB.get("inner_L", 670.0), BSTUB.get("inner", "HL130X9"),
+                                               BSTUB.get("inner_name", "thép góc nối trong B-B (232)"), 12.0)] + \
+                    [(sp_["z"], sp_["inner_L"], sp_.get("inner_sec", sp_["inner"]),
+                      sp_.get("inner_name", "thép góc nối trong A-A (229)"), sp_.get("inner_cut", 12.0))
+                     for sp_ in CFG.get("leg_splices", [])]:
                 si = sec(sec_)
                 if si["profile"][0] == [0.0, 0.0]:
-                    si["profile"] = [[12.0, 0.0]] + si["profile"][1:] + [[0.0, 12.0]]
-                    si["note"] = "vát góc lưng 12x12"
+                    si["profile"] = [[cut_, 0.0]] + si["profile"][1:] + [[0.0, cut_]]
+                    si["note"] = "vát góc lưng %gx%g" % (cut_, cut_)
                 legs_parts.append((Pz(zc_ - Li_ / 2), Pz(zc_ + Li_ / 2), nm_, sec_, gl - tl, None))
         for P1_, P2_, side_, secn_, g_, ext_ in legs_parts:
             s2_ = sec(secn_)
@@ -1615,8 +1734,11 @@ def main(dxf, outdir):
                                pl.get("mark", "228/228a"), pl["t"], pl["ext"])) if pl.get("ext") and BSTUB else
                            ("bản mã nối thanh cánh d%g của %s (bản mã chờ, vẽ để ráp)" % (pl["t"], pl["ext"]))
                            if pl.get("ext") else
-                           ("bản nối ngoài thanh cánh %s d%g" % ("B-B (233)" if pl["leg_splice"] == BSTUB["joint_mm"]
-                                                                 else "A-A (230)", pl["t"])) if pl.get("leg_splice") else
+                           ("bản nối ngoài thanh cánh %s d%g" % (BSTUB.get("joint_name", "B-B") + " (233)"
+                                                                 if pl["leg_splice"] == BSTUB["joint_mm"] else
+                                                                 next((x_.get("name", "A-A (230)") for x_ in SPL
+                                                                       if x_["z"] == pl["leg_splice"]), "A-A (230)"),
+                                                                 pl["t"])) if pl.get("leg_splice") else
                            ("bản mã nối thanh cánh d%g (mối nối với đoạn trên)" % pl["t"]) if pl.get("splice") else
                            ("bản mã nút đầu trên d%g (%s)%s" % (pl["t"], pl["note"], tag_))
                            if pl.get("hidden") else
@@ -2475,6 +2597,166 @@ def main(dxf, outdir):
             rep["clash_fix"].append({"loai": "lùi đầu thanh vách khỏi cánh đứng thanh vách chủ", "plan": pm_["plan"],
                                      "section": pm_["section"], "mm": dmm})
 
+    if CFG.get("top_bend"):
+        rep["top_bend"] = top_bend(members, plates, bolts, CFG["top_bend"])
+    corner_fix(members, LIB, rep)
+
+    for m in members:
+        m["mass_kg"] = round(m["A_cm2"] * 1e-4 * m["length"] * 7850, 3)
+    zs = [c for m in members for c in (m["p1"][2], m["p2"][2])]
+    rep["z_range_m"] = [round(min(zs), 3), round(max(zs), 3)]
+    rep["faces"] = CFG.get("faces")
+    rep["leg"] = {"section": Lg["section"], "g_mm": Lg["g"], "n_brace_ends_on_leg": Lg["n_wp"]}
+    scene = {"title": f"Đoạn thân {SHEET} cột N122 (dựng từ BVTC)", "members": members, "sections": LIB,
+             "nodes": [], "plates": plates, "bolts": bolts,
+             "report": {"total_mass_kg": round(sum(m["mass_kg"] for m in members), 1),
+                        "orientation": {"x_members": {"outside": [], "inside": []}, "clash_other": [],
+                                        "clash_coplanar_overlap": [], "overridden": []}, "build": rep}}
+    out = Path(outdir)
+    out.mkdir(parents=True, exist_ok=True)
+    tag = SHEET.lower().replace("-", "")
+    (out / f"{tag}_scene.json").write_text(json.dumps(scene, ensure_ascii=False))
+    # dữ liệu kiểm tra chồng hình (mặt trước, hệ x-z mm)
+    chk = {"cad": [[[(sg["a"][0] - xc) * SC, zf(sg["a"][1])], [(sg["b"][0] - xc) * SC, zf(sg["b"][1])], sg["k"]]
+                   for sg in segs],
+           "plates": [[[(q[0] - xc) * SC, zf(q[1])] for q in pl["pts"]] for pl in plates2d],
+           "bolts": [[(b["p"][0] - xc) * SC, zf(b["p"][1])] for b in bolts2d], "plans": plan_chk,
+           "dropped_bolts": [[(q[0] - xc) * SC, zf(q[1])] for q in rep.pop("bolts_dropped_pts", [])],
+           "no_host": [{"section": m["section"], "p1": [(m["c1"][0] - xc) * SC, zf(m["c1"][1])],
+                        "p2": [(m["c2"][0] - xc) * SC, zf(m["c2"][1])], "side": "NGOAI" if m["out"] else "TRONG"}
+                       for m in rep.pop("no_host", [])]}
+    (out / f"{tag}_check.json").write_text(json.dumps(chk))
+    print(json.dumps(rep, ensure_ascii=False, indent=1)[:3000])
+    return scene
+
+
+def top_bend(members, plates, bolts, tb):
+    """Mặt cắt 1-1 DN-01: thanh ngang đỉnh L70x6 2080 (mặt có xà) BẺ 2 đầu 300 mm ra ngoài, độ dốc 327/1000 (~18 độ),
+    bản mã đỉnh bẻ theo (nét bản mã vẽ dọc phần bẻ). Phần ngoài |x| > x_b (đầu đoạn thẳng 2080/2) xoay quanh trục
+    đứng tại x = +-x_b, mặt lưng cột; thanh giữ 1 thanh, phần bẻ thể hiện bằng độ sâu theo chiều dài (prof)."""
+    th = math.atan(tb["slope"])
+    xb = tb["x_mm"] / 1000
+    out = {"x_bend_mm": tb["x_mm"], "goc_do": round(math.degrees(th), 2), "thanh": 0, "ban_ma": 0, "bu_long": 0}
+    for k in range(4):
+        Rk = rot(k)
+        loc = lambda p: Rk.T @ np.array(p)
+        glo = lambda v: Rk @ np.array(v)
+        near = lambda z: abs(z - tb["z_m"]) < 0.35
+        nrm = glo([0, -1.0, 0])                                    # pháp tuyến ngoài mặt k
+        # trục bẻ (đứng) tại x = +-x_b, nằm trong mặt áp của bản mã đỉnh (chung cho thanh, bản mã, bu lông)
+        ybs = [loc(pl["origin"])[1] for pl in plates if pl.get("face_k") == k and near(pl["origin"][2])
+               and abs(np.dot(pl["thick_dir"], nrm)) > 0.99 and pl.get("kind") != "filler"]
+        if not ybs:
+            continue
+        ybk = max(ybs)
+
+        def bend_pt(q, yb):
+            x, y, z = q
+            if abs(x) <= xb:
+                return np.array(q), 0.0
+            sg = 1 if x > 0 else -1
+            phi = -th * sg
+            dx, dy = x - sg * xb, y - yb
+            return np.array([sg * xb + dx * math.cos(phi) - dy * math.sin(phi),
+                             yb + dx * math.sin(phi) + dy * math.cos(phi), z]), phi
+
+        for m in members:
+            if m.get("face_k") != k or m["rule"] != "face" or not near(m["p1"][2]) or \
+                    abs(m["p1"][2] - m["p2"][2]) > 0.01:
+                continue
+            a, b = loc(m["p1"]), loc(m["p2"])
+            if max(abs(a[0]), abs(b[0])) <= xb + 0.01:
+                continue
+            L0 = abs(b[0] - a[0])
+            pts, ends = [], []
+            for q in (a, b):
+                ex = max(0.0, abs(q[0]) - xb)
+                sg = 1 if q[0] > 0 else -1
+                ends.append((sg * (xb + ex * math.cos(th)), ex * math.sin(th)))
+            Lp = abs(ends[1][0] - ends[0][0])
+            sg1 = 1 if ends[1][0] > ends[0][0] else -1
+            x_of = lambda xl: (xl - ends[0][0]) * sg1 * 1000                 # mm dọc thanh từ p1
+            pts = [[0.0, round(ends[0][1] * 1000, 2)]]
+            for xl in sorted((-xb, xb), key=lambda v: x_of(v)):
+                if 0 < x_of(xl) < Lp * 1000:
+                    pts.append([round(x_of(xl), 1), 0.0])
+            pts.append([round(Lp * 1000, 1), round(ends[1][1] * 1000, 2)])
+            for key, (xe, de) in zip(("p1", "p2"), ends):
+                q = loc(m[key])
+                q[0] = xe
+                m[key] = (glo(q) + nrm * de).round(5).tolist()
+            m["prof"], m["prof_n"] = pts, nrm.round(6).tolist()
+            m["length"] = round(L0, 4)                                 # chiều dài thật không đổi khi bẻ
+            m["bend_note"] = "bẻ 2 đầu ra ngoài theo mặt cắt %s (%s)" % (tb["plan"], tb["note"])
+            out["thanh"] += 1
+        for pl in list(plates):
+            if pl.get("face_k") != k or not near(pl["origin"][2]) or abs(np.dot(pl["thick_dir"], nrm)) < 0.99:
+                continue
+            o, a1, a2 = (np.array(pl[x]) for x in ("origin", "a1", "a2"))
+            P3 = [o + a1 * u + a2 * v for u, v in pl["poly"]]
+            xs = [loc(q)[0] for q in P3]
+            if max(abs(x) for x in xs) <= xb + 0.005:
+                continue
+            yb = ybk
+            sg = 1 if np.mean(xs) > 0 else -1
+            # cắt đa giác tại x = sg*xb: phần trong giữ, phần ngoài xoay
+            inner, outer = [], []
+            n_ = len(P3)
+            for i in range(n_):
+                qa, qb = loc(P3[i]), loc(P3[(i + 1) % n_])
+                ia, ib = sg * qa[0] <= xb, sg * qb[0] <= xb
+                (inner if ia else outer).append(qa)
+                if ia != ib:
+                    t_ = (sg * xb - qa[0]) / (qb[0] - qa[0])
+                    qc = qa + (qb - qa) * t_
+                    inner.append(qc)
+                    outer.append(qc)
+            if len(outer) < 3:
+                continue
+            outer = [bend_pt(q, yb)[0] for q in outer]
+            phi = -th * sg
+            a1o = Rk @ np.array([math.cos(phi), math.sin(phi), 0.0]) * np.sign(np.dot(a1, glo([1.0, 0, 0])) or 1)
+            tdo = Rk @ np.array([-math.sin(phi), math.cos(phi), 0.0]) * np.sign(np.dot(pl["thick_dir"], glo([0, 1.0, 0])))
+            for part, a1_, td_, nm_ in ((inner, a1, np.array(pl["thick_dir"]), ""), (outer, a1o, tdo, " (phần bẻ)")):
+                G = [glo(q) for q in part]
+                o_ = G[0]
+                poly = [[round(float(np.dot(q - o_, a1_)), 5), round(float(np.dot(q - o_, a2)), 5)] for q in G]
+                area = abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                               for i in range(len(poly)))) / 2
+                q_ = dict(pl, origin=o_.round(5).tolist(), a1=np.array(a1_).round(6).tolist(),
+                          thick_dir=np.array(td_).round(6).tolist(), poly=poly, area_m2=round(area, 5),
+                          mass_kg=round(area * pl["t_mm"] / 1000 * 7850, 2), reason=pl["reason"] + nm_)
+                if nm_:
+                    plates.append(q_)
+                else:
+                    plates[plates.index(pl)] = q_
+            out["ban_ma"] += 1
+        for b in bolts:
+            if b.get("face_k") != k or not near(b["p"][2]):
+                continue
+            q = loc(b["p"])
+            if abs(q[0]) <= xb:
+                continue
+            qn, phi = bend_pt(q, ybk)
+            R2 = np.array([[math.cos(phi), -math.sin(phi), 0], [math.sin(phi), math.cos(phi), 0], [0, 0, 1.0]])
+            b["p"] = glo(qn).round(5).tolist()
+            for key in ("axis", "nut"):
+                b[key] = (Rk @ R2 @ Rk.T @ np.array(b[key])).round(6).tolist()
+            out["bu_long"] += 1
+    return out
+
+
+def corner_fix(members, LIB, rep):
+    """2 thanh mặt kề nhau cùng bắt vào thanh cánh tại một cao độ: cánh còn lại (chĩa vào trong) đâm nhau ở góc
+    cột -> vát góc mép cánh còn lại ở đầu thanh (bội 5 mm, nhỏ nhất) - ĐỀ XUẤT. Gọi lại sau khi ghép 2 kiểu mặt
+    (combine_faces.py) để chỉ vát chỗ thật sự chạm với thanh mặt kề thật (góp ý: mặt không cấn thì không vát)."""
+
+    def touching(a_, b_):
+        sp = CK.samples(a_, LIB)
+        if len(sp) and np.any(CK.where_v(b_, LIB, sp, 0.001) > 0):
+            return True
+        sp = CK.samples(b_, LIB)
+        return bool(len(sp) and np.any(CK.where_v(a_, LIB, sp, 0.001) > 0))
     face_m = [m for m in members if m["rule"] == "face"]
     for i, a_ in enumerate(face_m):
         for b_ in face_m[i + 1:]:
@@ -2531,33 +2813,6 @@ def main(dxf, outdir):
                                      "section": a_["section"] + "/" + b_["section"],
                                      "mm": f"{best[1]}x{best[2]}" if best else "không gỡ được"})
 
-    for m in members:
-        m["mass_kg"] = round(m["A_cm2"] * 1e-4 * m["length"] * 7850, 3)
-    zs = [c for m in members for c in (m["p1"][2], m["p2"][2])]
-    rep["z_range_m"] = [round(min(zs), 3), round(max(zs), 3)]
-    rep["faces"] = CFG.get("faces")
-    rep["leg"] = {"section": Lg["section"], "g_mm": Lg["g"], "n_brace_ends_on_leg": Lg["n_wp"]}
-    scene = {"title": f"Đoạn thân {SHEET} cột N122 (dựng từ BVTC)", "members": members, "sections": LIB,
-             "nodes": [], "plates": plates, "bolts": bolts,
-             "report": {"total_mass_kg": round(sum(m["mass_kg"] for m in members), 1),
-                        "orientation": {"x_members": {"outside": [], "inside": []}, "clash_other": [],
-                                        "clash_coplanar_overlap": [], "overridden": []}, "build": rep}}
-    out = Path(outdir)
-    out.mkdir(parents=True, exist_ok=True)
-    tag = SHEET.lower().replace("-", "")
-    (out / f"{tag}_scene.json").write_text(json.dumps(scene, ensure_ascii=False))
-    # dữ liệu kiểm tra chồng hình (mặt trước, hệ x-z mm)
-    chk = {"cad": [[[(sg["a"][0] - xc) * SC, zf(sg["a"][1])], [(sg["b"][0] - xc) * SC, zf(sg["b"][1])], sg["k"]]
-                   for sg in segs],
-           "plates": [[[(q[0] - xc) * SC, zf(q[1])] for q in pl["pts"]] for pl in plates2d],
-           "bolts": [[(b["p"][0] - xc) * SC, zf(b["p"][1])] for b in bolts2d], "plans": plan_chk,
-           "dropped_bolts": [[(q[0] - xc) * SC, zf(q[1])] for q in rep.pop("bolts_dropped_pts", [])],
-           "no_host": [{"section": m["section"], "p1": [(m["c1"][0] - xc) * SC, zf(m["c1"][1])],
-                        "p2": [(m["c2"][0] - xc) * SC, zf(m["c2"][1])], "side": "NGOAI" if m["out"] else "TRONG"}
-                       for m in rep.pop("no_host", [])]}
-    (out / f"{tag}_check.json").write_text(json.dumps(chk))
-    print(json.dumps(rep, ensure_ascii=False, indent=1)[:3000])
-    return scene
 
 
 def use_sheet(name):

@@ -729,9 +729,54 @@ renderer.domElement.addEventListener('pointerup', (e) => {
     if (hit) fbStart(hit, e);
     return;
   }
+  if (hit && $('orbitPick').checked) setPivot(hit.point, hit.object);
   if (hit && hit.object.userData.bolts && hit.instanceId !== undefined) { select(null); showBolt(hit.instanceId); return; }
   if (hit && hit.object.userData.plate !== undefined) { select(null); showPlate(hit.object.userData.plate); return; }
   select(hit ? hit.object.userData.id : null);
+});
+
+// ---------------------------------------------------------------- tâm xoay (góp ý: xoay quanh cấu kiện được chọn)
+const pivotMark = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12),
+  new THREE.MeshBasicMaterial({ color: 0xff7a00, depthTest: false, transparent: true, opacity: 0.85 }));
+pivotMark.renderOrder = 999; pivotMark.visible = false; scene.add(pivotMark);
+let lastPicked = null;
+function setPivot(p, obj) {
+  // giữ nguyên hướng nhìn: dời camera cùng lượng với tâm xoay (cấu kiện ra giữa màn hình, khoảng cách không đổi)
+  const d = new THREE.Vector3().copy(p).sub(controls.target);
+  camera.position.add(d); controls.target.copy(p); controls.update();
+  pivotMark.position.copy(p);
+  pivotMark.scale.setScalar(Math.max(0.01, camera.position.distanceTo(p) * 0.006));
+  pivotMark.visible = true; lastPicked = obj || null;
+  requestRender();
+}
+controls.addEventListener('change', () => {
+  if (pivotMark.visible) pivotMark.scale.setScalar(Math.max(0.01, camera.position.distanceTo(controls.target) * 0.006));
+});
+function pivotAll() {
+  const box = new THREE.Box3().setFromObject(steelGroup);
+  setPivot(box.getCenter(new THREE.Vector3()));
+  pivotMark.visible = false; requestRender();
+}
+$('btnOrbitAll').addEventListener('click', pivotAll);
+renderer.domElement.addEventListener('dblclick', (e) => {
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const objs = [...meshes.values()].filter((x) => x.visible && x.userData.pickable);
+  if (plateGroup.visible) objs.push(...plateGroup.children);
+  if (boltGroup.visible) objs.push(...boltGroup.children);
+  const hit = ray.intersectObjects(objs)[0];
+  if (hit) setPivot(hit.point, hit.object);
+});
+window.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
+  if ((e.key === 'f' || e.key === 'F') && lastPicked) {
+    // nhìn sát cấu kiện: lùi camera về khoảng cách ~ 2 lần kích thước cấu kiện (tối đa 3 m) theo hướng đang nhìn
+    const b = new THREE.Box3().setFromObject(lastPicked);
+    const sz = Math.min(3, Math.max(0.4, b.getSize(new THREE.Vector3()).length() * 0.8));
+    const dir = new THREE.Vector3().copy(camera.position).sub(controls.target).normalize();
+    camera.position.copy(controls.target).addScaledVector(dir, sz); controls.update(); requestRender();
+  }
 });
 
 function select(id) {

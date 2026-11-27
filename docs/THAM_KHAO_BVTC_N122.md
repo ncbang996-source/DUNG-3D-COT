@@ -198,7 +198,7 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
   (k = 1, 3). Dựng 2 lần (tờ cấu hình `DN-02`, `DN-02s`) rồi ghép theo mặt (`combine_faces.py`).
 - Không dựng: L70x6 nghiêng chìa ra ngoài (thanh xà X1/X2 vẽ cụt), L70x6 chéo lên ở đỉnh (thanh DN-01). Lỗ của chúng
   trên bản mã = lỗ chờ (báo `holes_waiting`). Ghi chú tờ: lỗ bu lông leo trên thanh 201, 203 - không thể hiện.
-- Thanh cánh: HL130x9 203/204 từ khe B-B (860 trên đường gãy) tới khe A-A (6240), HL130x9 201/202 từ A-A tới đỉnh 7568.
+- Thanh cánh: HL130x9 203/204 từ khe B-B (860 trên đường gãy) tới khe A-A (6260; trước ghi 6240 - lệch 20 mm so với DXF, đã sửa), HL130x9 201/202 từ A-A tới đỉnh 7568.
 - Mối nối B-B (chi tiết DN-02): thép góc nối trong HL130x9 (232) dài 670 vát góc lưng 12x12, bản nối ngoài d10 (233)
   145x670, tấm d3 (231) 145x330. Chữ "HL130x12" trong hình B-B ghi nhầm: số hiệu 301 = HL150x12 (thanh cánh DT-01).
   Tấm d3 rộng 145 (> cánh 130) nên nằm NGOÀI, dưới bản d10, trên lưng HL130x9 -> 2 thanh cánh thẳng MẶT TRONG, lưng
@@ -216,3 +216,38 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
   (25x55 .. 60x100) tránh thanh xiên mặt cột đi vào nút góc.
 - Ráp lên DT-02 + DT-01: khớp theo 24 bu lông chung (3 bu lông M24 bản mã 228 vào phần đứng x 8). Cao độ ráp 18,525 m;
   đường gãy trong DT-01 thấp hơn 12 mm so với tờ DN-02 (DT-01 lấy theo đường tim).
+
+## Đợt góp ý gop_y_DT-02_20261127 (5 ý) - quy tắc rút ra
+
+- (1) Nút 3 thanh giao nhau: ít nhất 1 thanh chạy thẳng. DT-02 nút giữa (bản mã 418/419): 4 thanh xiên L90x7 đã dừng ở
+  bản mã -> thanh ngang L80x6 chạy LIÊN TỤC qua bản mã (trước tách 2 thanh). Bản mã áp lưng thanh ngang (thanh TRONG
+  chạy qua). DT-01 (cắt thanh ngang, 2 thanh xiên chạy thẳng) giữ nguyên.
+- (2) Phần xà dựng sau: bỏ thanh xiên / chống của xà (L60x5 chống, L70x6 nghiêng) chìa ra ngoài thân cột; giữ thanh ngang
+  mặt cột (L90x7 2840, L70x6 2080) đủ chiều dài, giữ bản mã có tai (lỗ của xà = lỗ chờ). Cấu hình `xa_keep_horizontal`.
+- (3) App: xoay quanh cấu kiện được chọn (tâm xoay = điểm nhấn trên cấu kiện, chấm cam); nhấn đúp đặt tâm xoay; phím F
+  nhìn sát; nút "Xoay quanh cả cột".
+- (4) Vát góc thanh vách (đề xuất): vát tới khi khe >= 10 mm với thép quanh góc vách (trừ thanh chủ thanh vách tựa lên);
+  không đạt 10 mm thì vừa hết chạm và ghi rõ trong báo cáo (`vach_dn.vat_goc`, `khe_min_mm`).
+- (5) Vát góc cột (đề xuất, 2 thanh mặt kề đâm nhau ở góc): tính lại SAU KHI GHÉP 2 kiểu mặt (combine_faces.py) với mặt kề
+  thật -> mặt không cấn thì không vát (VD L90x7 1570 mặt bên DN-02).
+- Phát hiện khi ráp DN-01: khe mối nối A-A DN-02 trên DXF ở 6255..6265 (trước đặt 6240, lệch 20 mm so với bản nối và bu lông
+  vẽ) -> sửa 6260.
+
+## Đoạn ngọn DN-01 (trên cùng; dựng: `bash tools/bvtc/build_n122.sh`, ghép thẳng vào cột, không xuất riêng)
+
+- Tờ DN-01 vẽ lặp phần đỉnh DN-02 (L90x7 1570 -> mối nối A-A HL120x8 -> L70x6 1710). Người dùng chốt: lấy DN-01 thay phần
+  trùng phía trên mối nối A-A, trừ thanh ngang L70x6 (234) và thanh xiên L80x6 (214) giữ theo DN-02 (đã thống kê ở DN-02).
+  Ghép: `merge_segments.py ... --replace-above` (cao độ theo thép góc nối trong A-A, tinh chỉnh theo bu lông chung).
+- 2 kiểu mặt như DN-02 (tờ `DN-01` mặt có xà k = 0, 2; `DN-01s` mặt bên k = 1, 3), vách 1-1, 2-2, 3-3 dựng bằng dn_plans.py
+  (vách 1-1 dùng M20).
+- Thanh cánh: HL130x9 201/202 (DN-02) từ A-A DN-02 kéo tới mối nối A-A của DN-01 (khe 5112..5122 trên tờ DN-01), phía
+  trên L100x7 tới đỉnh (8952). Thanh cánh vẽ gộp (nét lưng chung) -> nhận thanh cánh rộng 100..130 (`leg_section`).
+- Mối nối A-A DN-01 (chi tiết 1/10): thép góc nối trong L90x7 dài 550 vát góc lưng 10x10 (tiết diện riêng `L90X7-NOI`),
+  bản nối ngoài d8 100x530, tấm d2 70x240. SUY LUẬN (như B-B DN-02): 2 thanh cánh thẳng MẶT TRONG, lưng L100x7 lùi 2 mm
+  -> tấm d2 nằm dưới bản nối ngoài, trên lưng L100x7.
+- Mặt cắt 1-1: thanh ngang đỉnh L70x6 2080 (mặt có xà) bẻ 2 đầu 300 ra ngoài, dốc 327/1000 (18,1 độ); bản mã đỉnh 117/117a
+  bẻ theo, bu lông phần bẻ xoay theo (`top_bend`). Thanh thể hiện 1 thanh, phần bẻ bằng độ sâu theo chiều dài.
+- "vát cánh 20x20mm" (1-1), "60x60mm" (2-2): mũi tên chỉ đầu thanh chéo vách ở góc -> vát đầu thanh vách (chọn góc vát
+  gỡ được chạm), không vát thanh ngang mặt cột (`plan_end_cut`).
+- Thanh ngang xà L90x7 2840 (3-3) chìa qua 2 thanh cánh, đầu thanh không nằm trên thanh chủ: độ sâu theo chỗ cắt thanh cánh
+  (NGOÀI áp mặt ngoài bản mã 123 trên thanh cánh).
