@@ -112,7 +112,7 @@ SHEETS["DN-01"] = {
     "detail_hole_max": 15.0,
     "banma_join_gap": 20.0,
     "trim_to_end_lines": True,
-    # mặt cắt 1-1: thanh ngang đỉnh L70x6 2080 bẻ 2 đầu 300 ra ngoài, dốc 327/1000 (người dùng chốt giữ đủ chiều dài)
+    # mặt cắt 1-1: thanh ngang đỉnh L70x6 2080 bẻ 2 đầu 300 VÀO TRONG (chụm theo biên xà X1), dốc 327/1000
     "top_bend": {"plan": "1-1", "x_mm": 1040.0, "slope": 0.327, "z_m": 8.917,
                  "note": "2080 + 2 x 300, dốc 327/1000"},
 }

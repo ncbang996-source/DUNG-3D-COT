@@ -257,3 +257,12 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
 - Vát 20x20 (1-1) / 60x60 (2-2) DN-01 ở đầu thanh chéo vách, chọn góc vát gỡ được chạm - ĐÃ XÁC NHẬN.
 - Thanh vách 1-1, 2-2 DN-02 có đầu chỉ đạt khe 2-5 mm (không đạt 10 mm bằng vát) - CHẤP NHẬN.
 - Vát góc cột (2 thanh mặt kề đâm nhau) - CHẤP NHẬN đề xuất.
+
+## Xà X1, X2 (tờ 2/6) - người dùng chốt trước khi dựng
+- Phạm vi: X1 = 1 bộ ở đỉnh DN-01 (z ~ 32,6 m); X2 giống hệt nhau ở 3 cao độ có thanh L90x7 2840 (DN-01 cắt 3-3
+  z ~ 28,1 m; DN-02 z ~ 24,0 m và ~ 20,0 m); tay phải đối xứng tay trái (tờ chỉ vẽ tay trái); chỉ ở 2 mặt có xà.
+- Biên dưới X2 (L90x7) ỐP CHỒNG lên đầu thanh L90x7 2840 của thân, bắt chung hàng bu lông 80/80/80/40.
+- Bản mã xà: có số hiệu -> theo hình chi tiết; không có -> HỎI từng bản. 2 bản d6 170x270 (5 lỗ) không số hiệu ở chỗ
+  biên dưới X2 gặp thanh 2840 (mặt bằng 3-3) -> theo chi tiết X215 (người dùng chốt).
+- SỬA (đọc lại mặt bằng 1-1 tờ xà): 2 đầu 300 của thanh L70x6 đỉnh DN-01 bẻ VÀO TRONG (chụm theo 2 biên X1), trước dựng
+  nhầm ra ngoài. Đã sửa: đầu thanh lệch vào 93 mm, bản mã 117/117a và bu lông phần bẻ xoay theo.

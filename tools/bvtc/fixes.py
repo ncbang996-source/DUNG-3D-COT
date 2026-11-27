@@ -1,6 +1,6 @@
 """Các bước gỡ chạm / chỉnh hình sau khi dựng 3D (dùng chung cho dt02.py, combine_faces.py, dn_plans.py).
 
-- top_bend: thanh ngang đỉnh + bản mã + bu lông bẻ 2 đầu ra ngoài (DN-01 mặt cắt 1-1).
+- top_bend: thanh ngang đỉnh + bản mã + bu lông bẻ 2 đầu VÀO TRONG theo thanh biên xà X1 (DN-01 mặt cắt 1-1).
 - corner_fix: vát góc mép cánh còn lại 2 thanh mặt kề đâm nhau ở góc cột (ĐỀ XUẤT).
 - first_ok / EndWindow: tìm cỡ vát nhanh. Vát chỉ bớt thép ở vùng đầu thanh (b <= cửa sổ W), nên:
   (1) kiểm chạm chỉ cần lấy mẫu vùng cửa sổ đầu thanh, phần ngoài cửa sổ kiểm 1 lần lúc chưa vát (vát chỉ bớt thép
@@ -79,7 +79,8 @@ class EndContact:
 
 
 def top_bend(members, plates, bolts, tb):
-    """Mặt cắt 1-1 DN-01: thanh ngang đỉnh L70x6 2080 (mặt có xà) BẺ 2 đầu 300 mm ra ngoài, độ dốc 327/1000 (~18 độ),
+    """Mặt cắt 1-1 DN-01: thanh ngang đỉnh L70x6 2080 (mặt có xà) BẺ 2 đầu 300 mm VÀO TRONG (về phía trục
+    xà, chụm theo 2 thanh biên xà X1 - mặt bằng 1-1 tờ xà), độ dốc 327/1000 (~18 độ),
     bản mã đỉnh bẻ theo (nét bản mã vẽ dọc phần bẻ). Phần ngoài |x| > x_b (đầu đoạn thẳng 2080/2) xoay quanh trục
     đứng tại x = +-x_b, mặt lưng cột; thanh giữ 1 thanh, phần bẻ thể hiện bằng độ sâu theo chiều dài (prof)."""
     th = math.atan(tb["slope"])
@@ -103,7 +104,7 @@ def top_bend(members, plates, bolts, tb):
             if abs(x) <= xb:
                 return np.array(q), 0.0
             sg = 1 if x > 0 else -1
-            phi = -th * sg
+            phi = th * sg
             dx, dy = x - sg * xb, y - yb
             return np.array([sg * xb + dx * math.cos(phi) - dy * math.sin(phi),
                              yb + dx * math.sin(phi) + dy * math.cos(phi), z]), phi
@@ -132,10 +133,10 @@ def top_bend(members, plates, bolts, tb):
             for key, (xe, de) in zip(("p1", "p2"), ends):
                 q = loc(m[key])
                 q[0] = xe
-                m[key] = (glo(q) + nrm * de).round(5).tolist()
-            m["prof"], m["prof_n"] = pts, nrm.round(6).tolist()
+                m[key] = (glo(q) - nrm * de).round(5).tolist()
+            m["prof"], m["prof_n"] = pts, (-nrm).round(6).tolist()
             m["length"] = round(L0, 4)                                 # chiều dài thật không đổi khi bẻ
-            m["bend_note"] = "bẻ 2 đầu ra ngoài theo mặt cắt %s (%s)" % (tb["plan"], tb["note"])
+            m["bend_note"] = "bẻ 2 đầu vào trong theo mặt cắt %s (%s)" % (tb["plan"], tb["note"])
             out["thanh"] += 1
         for pl in list(plates):
             if pl.get("face_k") != k or not near(pl["origin"][2]) or abs(np.dot(pl["thick_dir"], nrm)) < 0.99:
@@ -162,7 +163,7 @@ def top_bend(members, plates, bolts, tb):
             if len(outer) < 3:
                 continue
             outer = [bend_pt(q, yb)[0] for q in outer]
-            phi = -th * sg
+            phi = th * sg
             a1o = Rk @ np.array([math.cos(phi), math.sin(phi), 0.0]) * np.sign(np.dot(a1, glo([1.0, 0, 0])) or 1)
             tdo = Rk @ np.array([-math.sin(phi), math.cos(phi), 0.0]) * np.sign(np.dot(pl["thick_dir"], glo([0, 1.0, 0])))
             for part, a1_, td_, nm_ in ((inner, a1, np.array(pl["thick_dir"]), ""), (outer, a1o, tdo, " (phần bẻ)")):
