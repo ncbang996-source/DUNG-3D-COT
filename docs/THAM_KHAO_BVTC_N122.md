@@ -266,3 +266,20 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
   biên dưới X2 gặp thanh 2840 (mặt bằng 3-3) -> theo chi tiết X215 (người dùng chốt).
 - SỬA (đọc lại mặt bằng 1-1 tờ xà): 2 đầu 300 của thanh L70x6 đỉnh DN-01 bẻ VÀO TRONG (chụm theo 2 biên X1), trước dựng
   nhầm ra ngoài. Đã sửa: đầu thanh lệch vào 93 mm, bản mã 117/117a và bu lông phần bẻ xoay theo.
+
+## Xà X2 - đã dựng (tools/bvtc/xa.py, bước "xa_X2" trong build.py)
+- Đọc 4 hình tờ xà: mặt đứng tay trái (X201 biên dưới L90x7, X203 biên trên L70x6, X206 đứng L60x5, X205 chéo L60x5),
+  mặt bằng 3-3 (L75x6 đầu xà, L65x5 giữa, 4 chéo L60x5), 4-4 (2 L65x5 mặt phẳng biên trên), 6-6 (2 chéo L50x4 giữa
+  2 thanh đứng). Mặt sau / tay phải đối xứng; 3 cao độ z = 20,085 / 24,085 / 28,085 m (đường đinh thanh 2840).
+- Lưng thanh mặt xà ở +-1025 (mép cánh 2050, người dùng chốt). TRONG áp mặt trong thép chủ/bản mã: X201, X203 ở d = 0;
+  X206 áp mặt trong cánh X201/X203; X205 (NGOÀI): đầu dưới áp mặt ngoài bản mã có tai (DN-01: 123 d8; DN-02: 226 d10),
+  đầu trên áp mặt ngoài X203. Mặt bằng 3-3: bản mã X213 (d16), X214, X215 (d6) dưới cánh nằm biên dưới; thanh nét liền
+  chĩa lên trên cánh nằm, nét khuất chĩa xuống dưới bản mã. 4-4 áp mặt trên cánh còn lại X203; 6-6: 2 thanh ở 2 mặt cánh
+  còn lại X206 (khe ở giao = 5 mm, tấm đệm 1D.16_6 giảm còn 5).
+- Bản mã khớp hình chi tiết theo LỖ (8 hướng xoay/lật): lỗ lệch bu lông vẽ 0 mm (X213: 7,5 mm).
+- Bu lông: lớp thép tính theo hình học dọc trục; bu lông thân trùng lỗ (4 bu lông 2840 - bản 123) thay bằng bu lông xuyên
+  cả X201. Tấm đệm theo ký hiệu ở giao thanh chéo (3D.20_8, 2D.20_8, giảm dày cho vừa khe); khe <= 12 mm không ký hiệu
+  (đầu thanh chéo nét liền qua mép cánh biên, bản vẽ ghi 1D.20_6) -> 1 tấm dày bằng khe.
+- ĐỀ XUẤT (gỡ chạm): X206 đầu trên vát góc lưng 10x10 (cánh còn lại lùi 10); L50x4 (6-6) vát 15x5 góc lưng / 10x5 mép.
+- CHƯA RÕ (hỏi người dùng): 2 lỗ to ở tai bản X213 ngoài lưng biên (lỗ treo?), 2 lỗ trên biên dưới sát đầu xà ngoài
+  X213, 2 lỗ giữa L75x6 - hiện để lỗ không bắt bu lông.

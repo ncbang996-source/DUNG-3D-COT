@@ -32,6 +32,8 @@ data/n122/*.json + dist/*.html (build_standalone.mjs)
 | `combine_faces.py` | Ghép mặt có xà (k 0,2) + mặt bên (k 1,3); tính lại vát góc cột với mặt kề thật |
 | `dn_plans.py` | Vách ngang đoạn 2 kiểu mặt (thanh chéo góc–góc, bu lông, tấm đệm tâm, vát đầu thanh khe 10 mm) |
 | `merge_segments.py` | Ghép đoạn trên lên đoạn dưới; `--replace-above` (DN-01 thay đỉnh DN-02, giữ 214/234) |
+| `xa.py` | Xà X2: đọc mặt đứng + 3-3 + 4-4 + 6-6 tờ xà, đặt thanh theo quy tắc áp sát, bản mã khớp chi tiết theo lỗ, bu lông xếp lớp theo hình học, đối xứng, 3 cao độ, vát góc gỡ chạm |
+| `clash_sum.py` | Tóm tắt kiểm chạm theo loại cặp (thanh xà / tiết diện) |
 | `build.py` | Điều phối dựng tăng dần |
 
 ## Các bước dựng 1 tờ (`tools/bvtc/dung/`)

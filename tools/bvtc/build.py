@@ -104,9 +104,12 @@ def main():
     step("ghep_dn01", [py, M, "out/n122_3doan_scene.json", "out/dn01_full_scene.json", "out/n122_4doan_scene.json",
                        "--replace-above"], ["out/n122_3doan_scene.json", "out/dn01_full_scene.json", M],
          ["out/n122_4doan_scene.json"])
+    print("3b. Xà X2 (3 cao độ) ghép vào cột")
+    step("xa_X2", [py, f"{B}/xa.py", DXF, "out/n122_4doan_scene.json", "out/n122_xa_scene.json"],
+         ["out/n122_4doan_scene.json", f"{B}/xa.py", DXF] + CODE, ["out/n122_xa_scene.json"])
     print("4. Kiểm chạm (cột đủ + DN-02 đủ - phần đỉnh DN-02 được thay trong cột đủ)")
     checks = [("dt02", "out/dt02_scene.json"), ("dt01", "out/dt01_scene.json"), ("dn02", "out/dn02_full_scene.json"),
-              ("cot", "out/n122_4doan_scene.json")]
+              ("cot", "out/n122_4doan_scene.json"), ("cot_xa", "out/n122_xa_scene.json")]
 
     def chk(c):
         return step("kiem_" + c[0], [py, f"{B}/check_dt02.py", c[1], "all"], [c[1], f"{B}/check_dt02.py"], [])
@@ -124,7 +127,8 @@ def main():
              ("out/dn02_full_scene.json", "data/n122/dn02_scene.json", "dist/N122_DN-02.html"),
              ("out/n122_dt02_dt01_scene.json", "data/n122/dt02_dt01_scene.json", "dist/N122_DT-02+DT-01.html"),
              ("out/n122_3doan_scene.json", "data/n122/dt02_dt01_dn02_scene.json", "dist/N122_DT-02+DT-01+DN-02.html"),
-             ("out/n122_4doan_scene.json", "data/n122/n122_scene.json", "dist/N122_cot_DT-02+DT-01+DN-02+DN-01.html")]
+             ("out/n122_4doan_scene.json", "data/n122/n122_scene.json", "dist/N122_cot_DT-02+DT-01+DN-02+DN-01.html"),
+             ("out/n122_xa_scene.json", "data/n122/n122_xa_scene.json", "dist/N122_cot_co_xa_X2.html")]
     for src, dst, html in pairs:
         if fhash(src) != (fhash(dst) if (ROOT / dst).exists() else None):
             (ROOT / dst).write_bytes((ROOT / src).read_bytes())
