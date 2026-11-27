@@ -20,16 +20,18 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
   chi tiết 1/10). Tờ: DT-02, DT-01, DN-02, DN-01 (đã dựng; DN-01 chỉ ghép vào cột, không xuất riêng).
 - `data/NC111-32.dxf` + PDF — dự án đầu (cột NC111-32 dựng từ 3DLINE), app gốc `web/`, `src/`.
 
-## Chương trình
-- `tools/bvtc/dt02.py` — bộ dựng mọi đoạn thân (tên cũ). Cấu hình tờ trong `SHEETS` (khung mặt đứng, mặt cắt,
-  sườn chân cột, đặc thù tờ). Thêm tờ mới = thêm mục `SHEETS` rồi chạy, xem báo cáo `report.build`.
+## Chương trình (bản đồ mã + khóa cấu hình: `docs/BO_DUNG.md` - đọc trước, chỉ mở đúng đoạn mã cần sửa)
+- `tools/bvtc/dt02.py` — bộ dựng mọi đoạn thân (tên cũ). Cấu hình tờ trong `tools/bvtc/sheets.py` (`SHEETS`: khung
+  mặt đứng, mặt cắt, sườn chân cột, đặc thù tờ). Thêm tờ mới = thêm mục `SHEETS` rồi chạy, xem `brief.py`.
+- `tools/bvtc/fixes.py` — bẻ đầu thanh đỉnh, vát góc cột, tìm cỡ vát nhanh (`EndContact`, `first_ok`).
 - `tools/bvtc/bvtc_read.py` — đọc mặt đứng 2D thành thanh (nét mép, đường tâm, nét chiều dày, nhãn tiết diện).
 - `tools/bvtc/check_dt02.py` — kiểm tra va chạm (khớp đúng hình app dựng: khung lệch, vát, bẻ cánh, bẻ lệch).
 - `tools/bvtc/merge_segments.py` — ghép đoạn trên lên đoạn dưới thành 1 mô hình (khớp bản mã nối + bu lông chung);
   `--replace-above`: đoạn trên vẽ lặp phần đỉnh đoạn dưới (DN-01 / DN-02) -> thay phần trên mối nối A-A.
 - `tools/bvtc/combine_faces.py`, `tools/bvtc/dn_plans.py` — đoạn 2 kiểu mặt (DN-02): ghép mặt, dựng vách riêng.
-- `tools/bvtc/build_n122.sh` — dựng lại cả cột (DT-02, DT-01, DN-02, DN-01), ghép, kiểm chạm, đóng gói HTML (~10 phút;
-  chạy 3 tờ song song, mỗi tờ ~1,3 GB bộ nhớ). Cột đủ: `dist/N122_cot_DT-02+DT-01+DN-02+DN-01.html`.
+- `tools/bvtc/build_n122.sh` (= `build.py`) — dựng TĂNG DẦN cả cột (DT-02, DT-01, DN-02, DN-01), ghép, kiểm chạm,
+  đóng gói HTML: chỉ làm lại bước có đầu vào đổi (~80 s khi `--force`, vài giây khi đổi ít). Nhật ký `out/log_*.txt`.
+  Cột đủ: `dist/N122_cot_DT-02+DT-01+DN-02+DN-01.html`.
 - `tools/bvtc/brief.py <scene>` — in tóm tắt báo cáo dựng (cảnh báo, gỡ chạm, mặt cắt...).
 - `tools/bvtc/render_regions.py` — cắt vùng DXF ra PNG để xem bản vẽ.
 - `tools/build_standalone.mjs` — đóng gói `web/` + scene JSON thành 1 file HTML (cần `npm install` một lần).
@@ -38,9 +40,10 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
 
 ## Lệnh
 ```bash
-bash tools/bvtc/build_n122.sh                   # toàn bộ: dựng + ghép + kiểm + HTML
+bash tools/bvtc/build_n122.sh                   # dựng tăng dần + ghép + kiểm + HTML (--force: làm lại tất cả)
 D=data/n122/BVTC_COT_N122-3230.dxf
-python3 tools/bvtc/dt02.py $D out DT-01          # hoặc DT-02 (~8-10 s; DXF đã phân tích lưu ở out/.cache)
+python3 tools/bvtc/dt02.py $D out DT-01          # 1 tờ (5-10 s; DXF đã phân tích lưu ở out/.cache)
+python3 tools/bvtc/check_dt02.py out/dt01_scene.json all      # bu lông + thép–thép + bản mã–thép (1 lần nạp)
 python3 tools/bvtc/check_dt02.py out/dt01_scene.json clash    # thép–thép: phải "cặp chạm: 0"
 python3 tools/bvtc/check_dt02.py out/dt01_scene.json plates   # bản mã–thép: phải "bản mã chạm thép: 0"
 cp out/dt01_scene.json data/n122/dt01_scene.json
@@ -51,8 +54,9 @@ node tools/shot.mjs dist/N122_DT-01.html <thư mục ảnh> '[{"tag":"tong","t":
 python3 tools/bvtc/render_regions.py $D <thư mục ảnh> ten,x0,y0,rong,cao   # cắt bản vẽ (toạ độ DXF)
 python3 -m pytest -q
 ```
-Sau khi sửa bộ dựng: chạy lại **cả DT-02** và so với `data/n122/dt02_scene.json` (members/bolts phải giữ nguyên
-nếu không cố ý đổi) để không làm hỏng đoạn đã được duyệt.
+Sau khi sửa bộ dựng: chạy `build.py` và so `data/n122/*.json` với `git show HEAD:...` (members/bolts phải giữ
+nguyên nếu không cố ý đổi) để không làm hỏng đoạn đã được duyệt.
+Tiết kiệm: in tóm tắt (`brief.py`, `check ... all`), không in cả JSON; cắt ảnh bản vẽ vùng nhỏ; chạy lại đúng phần sửa.
 
 ## Hệ toạ độ mô hình
 Mét; z = 0 tại đầu dưới thanh cánh (mặt trên bản đế); mặt trước y = −h(z). Độ sâu δ (mm) tính từ mặt phẳng qua

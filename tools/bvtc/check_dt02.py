@@ -60,6 +60,8 @@ def where(m, S, q, eps=0.0015):
 def bolt_issues(s, S):
     out = []
     ms = s["members"]
+    A1 = np.array([m["p1"] for m in ms], float)
+    A2 = np.array([m["p2"] for m in ms], float)
     for i, b in enumerate(s["bolts"]):
         if b["kind"] in ("neo",):
             continue
@@ -67,11 +69,11 @@ def bolt_issues(s, S):
         ax = np.array(b["nut"])
         L = (b.get("grip_mm") or 20) / 1000
         pts = [p + ax * L * f for f in np.linspace(0.1, 0.9, 9)]
-        for m in ms:
-            if min(np.linalg.norm(np.array(m["p1"]) - p), np.linalg.norm(np.array(m["p2"]) - p)) > 3 and \
-                    np.linalg.norm(np.cross(np.array(m["p2"]) - np.array(m["p1"]), np.array(m["p1"]) - p)) / \
-                    np.linalg.norm(np.array(m["p2"]) - np.array(m["p1"])) > 0.3:
-                continue
+        # lọc thanh xa (cùng điều kiện như trước, tính cho mọi thanh một lần)
+        d_end = np.minimum(np.linalg.norm(A1 - p, axis=1), np.linalg.norm(A2 - p, axis=1))
+        d_line = np.linalg.norm(np.cross(A2 - A1, A1 - p), axis=1) / np.linalg.norm(A2 - A1, axis=1)
+        for mi in np.nonzero(~((d_end > 3) & (d_line > 0.3)))[0]:
+            m = ms[mi]
             P1, P2, e1, e2 = frame(m)
             hits = [where(m, S, q) for q in pts]
             for fl in (1, 2):
@@ -157,7 +159,27 @@ def bend_theta(m, xmm):
 
 
 def where_v(m, S, Q, eps=0.0015):
-    """Bản véc-tơ của where(): Q (n,3) -> mảng 0/1/2."""
+    """Bản véc-tơ của where(): Q (n,3) -> mảng 0/1/2. Lọc trước các điểm xa đoạn trục thanh hơn bán kính bao R
+    (chắc chắn ngoài thanh) - kết quả không đổi, nhanh hơn nhiều khi Q lớn."""
+    Q = np.asarray(Q, float)
+    if len(Q) > 64:
+        P1, P2 = frame(m)[:2]
+        s_ = S[m["section"]]
+        bb = s_["b"] / 1000
+        R = 2 * bb + abs(m["g"][0]) / 1000 + abs(m["g"][1]) / 1000 + 0.02 + max(0.0, -eps)
+        if m.get("prof"):
+            R += max(abs(d) for _, d in m["prof"]) / 1000 * 2
+        ab = P2 - P1
+        t = np.clip((Q - P1) @ ab / (ab @ ab), 0.0, 1.0)
+        near = np.linalg.norm(Q - (P1 + np.outer(t, ab)), axis=1) <= R
+        out = np.zeros(len(Q), int)
+        if np.any(near):
+            out[near] = _where_v(m, S, Q[near], eps)
+        return out
+    return _where_v(m, S, Q, eps)
+
+
+def _where_v(m, S, Q, eps=0.0015):
     P1, P2, e1, e2 = frame(m)
     L = np.linalg.norm(P2 - P1)
     u = (P2 - P1) / L
@@ -198,10 +220,13 @@ def where_v(m, S, Q, eps=0.0015):
                 continue
             bb, aa = cc["b"] / 1000, cc["a"] / 1000
             near = x0 < bb
+            # điểm ngoài đầu thanh (x0 < 0, khi kiểm khe có nới) lấy theo mép vát tại đầu thanh: vát lớn hơn luôn bớt
+            # thép nhiều hơn (đơn điệu - cần cho tìm cỡ vát bằng chia đôi)
+            x0c = np.maximum(x0, 0.0)
             if cc["flange"] == fl:
-                r |= near & (w > b - aa * (1 - x0 / bb))
+                r |= near & (w > b - aa * (1 - x0c / bb))
             if cc["flange"] == "heel":
-                r |= near & ((fl == "out") | (w < aa * (1 - x0 / bb)))
+                r |= near & ((fl == "out") | (w < aa * (1 - x0c / bb)))
         return r
     out = np.zeros(len(Q), int)
     out[in2 & ~cutmask("out", cb)] = 2
@@ -231,10 +256,13 @@ _GEOM_KEYS = ("p1", "p2", "poff1", "poff2", "e1", "e2", "frames", "g", "section"
               "prof_n", "rule")
 
 
-def samples(m, S, step=0.01):
+def samples(m, S, step=0.01, xr=None, outside=False):
     """Điểm mẫu trên 2 cánh (mặt ngoài + giữa chiều dày), bỏ phần vát; có bẻ cánh, bẻ lệch.
-    Tính bằng mảng numpy và nhớ theo hình học thanh (gọi lại khi thanh không đổi thì lấy ngay)."""
-    key = (json.dumps({k: m.get(k) for k in _GEOM_KEYS}, sort_keys=True, default=str), step)
+    Tính bằng mảng numpy và nhớ theo hình học thanh (gọi lại khi thanh không đổi thì lấy ngay).
+    xr = (x0, x1) m dọc thanh: chỉ lấy điểm có x trong khoảng (outside=True: ngoài khoảng) - đúng tập con của bộ
+    điểm đầy đủ, dùng khi tìm cỡ vát ở đầu thanh (phần còn lại của thanh không đổi)."""
+    key = (json.dumps({k: m.get(k) for k in _GEOM_KEYS}, sort_keys=True, default=str), step,
+           tuple(round(v, 6) for v in xr) if xr else None, outside)
     hit = _SAMPLE_CACHE.get(key)
     if hit is not None:
         return hit
@@ -251,6 +279,9 @@ def samples(m, S, step=0.01):
                                    np.arange(max(e_, L - e_), L - 0.001, fine)]))
     ws = np.linspace(0.002, b - 0.002, max(3, int(b / fine) + 1))
     cs = np.array([0.0015, t / 2, t - 0.0015])
+    if xr is not None:
+        inw = (xs >= xr[0]) & (xs <= xr[1])
+        xs = xs[~inw] if outside else xs[inw]
     X, W, C = np.meshgrid(xs, ws, cs, indexing="ij")
     X, W, C = X.ravel(), W.ravel(), C.ravel()
     base = P1[None, :] + np.outer(X, u)
@@ -275,25 +306,33 @@ def samples(m, S, step=0.01):
     return res
 
 
+_F21 = np.linspace(0, 1, 21)
+
+
 def seg_dist(a1, a2, b1, b2):
-    best = 1e9
-    for f in np.linspace(0, 1, 21):
-        p = a1 + (a2 - a1) * f
-        ab = b2 - b1
-        t = np.clip(np.dot(p - b1, ab) / np.dot(ab, ab), 0, 1)
-        best = min(best, np.linalg.norm(p - (b1 + ab * t)))
-    return best
+    """Khoảng cách gần đúng 2 đoạn (21 điểm trên đoạn a tới đoạn b)."""
+    a1, a2, b1, b2 = (np.asarray(v, float) for v in (a1, a2, b1, b2))
+    P = a1 + np.outer(_F21, a2 - a1)
+    ab = b2 - b1
+    den = ab @ ab
+    t = np.clip((P - b1) @ ab / den, 0, 1) if den > 0 else np.zeros(len(P))
+    return float(np.min(np.linalg.norm(P - (b1 + np.outer(t, ab)), axis=1)))
 
 
 def clashes(s, S, eps=0.001, only=None):
     ms = s["members"]
     res = []
     fr = {m["id"]: frame(m) for m in ms}
+    lo = np.array([np.minimum(*fr[m["id"]][:2]) for m in ms])
+    hi = np.array([np.maximum(*fr[m["id"]][:2]) for m in ms])
     for i, a in enumerate(ms):
         if only and a["id"] not in only:
             continue
         A1, A2 = fr[a["id"]][:2]
-        cand = [b for b in ms if b is not a and seg_dist(A1, A2, *fr[b["id"]][:2]) < 0.2]
+        # khoảng cách 2 hộp bao đầu-mút >= 0.2 thì chắc chắn seg_dist >= 0.2: bỏ qua sớm
+        gap_ = np.linalg.norm(np.maximum(0, np.maximum(lo - hi[i], lo[i] - hi)), axis=1)
+        cand = [ms[j] for j in np.nonzero(gap_ < 0.2)[0] if ms[j] is not a
+                and seg_dist(A1, A2, *fr[ms[j]["id"]][:2]) < 0.2]
         if not cand:
             continue
         pts = samples(a, S)
@@ -361,4 +400,17 @@ if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "plates":
     res = plate_clashes(s, S)
     print("bản mã chạm thép:", len(res))
     for r in res:
+        print(r)
+
+
+if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "all":
+    # 1 lần nạp: bu lông xuyên dọc cánh (đã in ở trên) + thép-thép + bản mã-thép, chỉ in số lượng + 10 dòng đầu
+    s, S = load(sys.argv[1])
+    res = clashes(s, S)
+    print("cặp chạm:", len(res))
+    for r in res[:10]:
+        print(r)
+    res = plate_clashes(s, S)
+    print("bản mã chạm thép:", len(res))
+    for r in res[:10]:
         print(r)

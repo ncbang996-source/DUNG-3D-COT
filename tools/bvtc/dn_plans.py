@@ -19,6 +19,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))
 import check_dt02 as CK  # noqa: E402
 import dt02 as T  # noqa: E402
+import fixes as F  # noqa: E402
 
 SC = 25.0
 ED = {16: 25.0, 20: 30.0, 24: 40.0}
@@ -42,7 +43,7 @@ def main(dxf, sheet, scene_in, scene_out):
     rep = {}
     s["members"] = [m for m in s["members"] if m["rule"] != "plan"]
     s["bolts"] = [b for b in s["bolts"] if b["kind"] != "plan"]
-    s["plates"] = [p for p in s["plates"] if "mặt cắt" not in p.get("reason", "")]
+    s["plates"] = [p for p in s["plates"] if "mặt cắt" not in p.get("reason", "") and "tâm vách" not in p.get("reason", "")]
     zlev = {k: v["z_mm"] for k, v in s["report"]["build"]["mat_A"]["plans"].items()}
     nid = max(m["id"] for m in s["members"])
     for pname, (_ym, box) in T.PLANS.items():
@@ -196,22 +197,27 @@ def main(dxf, sheet, scene_in, scene_out):
             if not hits(m, near):
                 continue
             best = None
-            # khe mục tiêu 10 mm; không đạt (cánh nằm thanh vách cũng sát thép bên dưới) thì lấy khe lớn nhất đạt được
+            # khe mục tiêu 10 mm; không đạt (cánh nằm thanh vách cũng sát thép bên dưới) thì lấy khe lớn nhất đạt được.
+            # Tìm nhanh (fixes.EndContact + first_ok): chỉ lấy mẫu vùng đầu thanh, b nhỏ nhất tìm bằng chia đôi -
+            # cùng kết quả như thử lần lượt (vát lớn hơn chỉ bớt thép).
             for gap_ in (GAP, 0.008, 0.006, 0.005, 0.004, 0.003, 0.002, 0.0):
+                m.pop(ck, None)
+                ec = F.EndContact(S, [(m, ck, o, None, 0.001 if o["id"] in m["host_ids"] else -gap_) for o in near])
                 for fl_ in ("out", "conn", "heel"):
                     amax = 25 if fl_ == "heel" else 55          # góc lưng: không cắt tới lỗ bu lông (đường đinh 35)
                     bmax = 150 if fl_ == "heel" else 395          # góc lưng: cánh còn lại lùi đúng b
                     m[ck] = {"flange": fl_, "a": amax, "b": bmax}
-                    if hits(m, near, gap_):
+                    if ec.touching():
                         continue                   # vát tối đa cũng không đạt khe này
                     for A_ in range(10, amax + 5, 5):
-                        for B_ in range(10, bmax + 5, 5):
-                            if best and A_ * B_ >= best[0]:
-                                break
+                        cand = [B_ for B_ in range(10, bmax + 5, 5) if not (best and A_ * B_ >= best[0])]
+
+                        def ok_b(B_, A_=A_, fl_=fl_):
                             m[ck] = {"flange": fl_, "a": A_, "b": B_}
-                            if not hits(m, near, gap_):
-                                best = (A_ * B_, A_, B_, gap_, fl_)
-                                break
+                            return not ec.touching()
+                        B_ = F.first_ok(cand, ok_b)
+                        if B_ is not None:
+                            best = (A_ * B_, A_, B_, gap_, fl_)
                 if best:
                     break
             if best:
