@@ -19,7 +19,8 @@ DXF = "data/n122/BVTC_COT_N122-3230.dxf"
 OUT = ROOT / "out"
 STAMP = OUT / ".stamp"
 FORCE = "--force" in sys.argv
-CODE = [f"{B}/dt02.py", f"{B}/bvtc_read.py", f"{B}/check_dt02.py", f"{B}/fixes.py", "src/section_library.py"]
+CODE = [f"{B}/dt02.py", f"{B}/dt02_base.py", f"{B}/state.py", f"{B}/bvtc_read.py", f"{B}/check_dt02.py",
+        f"{B}/fixes.py", "src/section_library.py"] + sorted(str(p.relative_to(ROOT)) for p in (ROOT / B / "dung").glob("*.py"))
 TAG = {"DT-02": "dt02", "DT-01": "dt01", "DN-02": "dn02", "DN-02s": "dn02s", "DN-01": "dn01", "DN-01s": "dn01s"}
 
 sys.path.insert(0, str(ROOT / B))
