@@ -22,7 +22,10 @@ data/n122/*.json + dist/*.html (build_standalone.mjs)
 | File | Nội dung |
 |---|---|
 | `sheets.py` | Cấu hình từng tờ `SHEETS` (bảng khóa bên dưới) |
-| `dt02.py` | Bộ dựng 1 tờ: hàm hình học 2D, `read_elevation` (thanh cánh), `main` (mọi bước, xem bảng mục) |
+| `state.py` | Tờ đang dựng (`ST.CFG`, `ST.BOX`, `ST.PLANS`, `ST.SHEET`, `ST.BASE_ZONE`), đặt bằng `dt02.use_sheet` |
+| `dt02.py` | Điểm vào: `main` gọi lần lượt các bước `dung/b0..b9` (truyền biến qua từ điển V) |
+| `dt02_base.py` | Hàm hình học 2D, `sec`/`LIB`, `banma_loops`, `fit_detail`, `read_dxf_cached`, `read_elevation` (thanh cánh) |
+| `dung/b*.py` | Các bước dựng (bảng dưới). Mỗi bước: `run(V)` nhận biến bước trước, trả biến bước sau dùng |
 | `bvtc_read.py` | Đọc nét mặt đứng thành thanh (nét mép, đường tâm, nét chiều dày, nhãn tiết diện) |
 | `fixes.py` | `top_bend` (bẻ đầu thanh đỉnh DN-01), `corner_fix` (vát góc cột), `EndContact`/`first_ok` (tìm cỡ vát nhanh) |
 | `check_dt02.py` | Hình học kiểm chạm khớp app (`frame`, `samples`, `where_v`, `clashes`, `plate_clashes`, `bolt_issues`) |
@@ -31,22 +34,19 @@ data/n122/*.json + dist/*.html (build_standalone.mjs)
 | `merge_segments.py` | Ghép đoạn trên lên đoạn dưới; `--replace-above` (DN-01 thay đỉnh DN-02, giữ 214/234) |
 | `build.py` | Điều phối dựng tăng dần |
 
-## Các mục trong `dt02.main` (tìm bằng `grep -n "# --- <đầu dòng>" tools/bvtc/dt02.py`)
-| Mục (đầu dòng chú thích) | Việc |
+## Các bước dựng 1 tờ (`tools/bvtc/dung/`)
+| Tệp | Việc |
 |---|---|
-| (đầu hàm) | lọc thanh giằng: trong thân / khuất / tờ trên-dưới / xà (`xa_keep_horizontal`, `drop_rules`), cắt theo nét đầu thanh |
-| `gốc cao độ` | z = 0 tại đầu dưới thanh cánh |
-| `bản mã (lớp Banma)` / `NÉT KHUẤT` / `bản vẽ đứng thấy cạnh` | đọc bản mã mặt đứng, bản mã nét khuất, bản hàn vuông góc |
-| `hình chi tiết bản mã` | khớp hình chi tiết theo số hiệu (xoay/lật), khớp lỗ với bu lông vẽ, lỗ chờ |
-| `đoạn đặt trên đoạn khác` | DT-01 trên DT-02 (bản mã chờ) |
-| `thanh vẽ liền một đường tâm` | tách thanh tại bản mã (trừ khi thanh xiên đã dừng ở đó) |
-| `thanh chủ của từng đầu thanh` | thanh chủ, `back_extra`/`leg_sec_at` (thanh cánh nhiều đoạn), độ sâu lan truyền |
-| `nút giữa có thanh ngang bẻ lệch` | DT-01 1-1 |
-| `vát cánh theo ghi chú` | vát theo ghi chú tờ, `level_cut` |
-| `bu lông vẽ` / `đầu thanh` / `chồng lớp thép` / `tấm đệm` | bu lông, đầu thanh theo bu lông, lớp thép, tấm đệm |
-| `chiếu sang 3D` / `ĐỈNH ĐOẠN UỐN` | dựng 3D 4 mặt, thanh cánh nhiều đoạn + thép góc nối trong, bản mã |
-| `mặt cắt vách ngang` .. `BẺ CÁNH CỤC BỘ` | vách (đoạn thân: 1/4 rồi xoay), đầu thanh vách 55, gỡ chạm, bẻ cánh |
-| (cuối hàm) | `top_bend`, `corner_fix`, ghi scene + báo cáo |
+| `b0_loc_thanh` | đọc mặt đứng, lọc thanh giằng (trong thân / khuất / tờ kề / xà: `xa_keep_horizontal`, `drop_rules`), cắt theo nét đầu thanh, gốc cao độ |
+| `b1_ban_ma` | bản mã mặt đứng (Banma, nét khuất, bản hàn vuông góc), khớp hình chi tiết theo số hiệu + lỗ, lỗ chờ |
+| `b2_noi_tach` | đoạn đặt trên đoạn khác (bản mã chờ), bản mã nối đỉnh, tách thanh tại bản mã (trừ khi thanh xiên đã dừng ở đó) |
+| `b3_do_sau` | thanh chủ từng đầu thanh, thanh cánh nhiều đoạn (`back_extra`, `leg_sec_at`, tấm bù), lan truyền độ sâu |
+| `b4_vat_ghi_chu` | nút giữa bẻ lệch (DT-01), vát theo ghi chú tờ, `level_cut` |
+| `b5_bu_long` | bu lông vẽ, đầu thanh theo bu lông, chồng lớp thép tại bu lông |
+| `b6_tam_dem` | tấm đệm (khối D, `nD.F_T`) |
+| `b7_dung_3d` | chiếu 3D, xoay 4 mặt: thanh cánh nhiều đoạn + thép góc nối trong, thanh giằng, bản mã, bu lông |
+| `b8_vach` | vách ngang đoạn thân (1/4 rồi xoay), đầu thanh vách 55, gỡ chạm vách |
+| `b9_hoan_thien` | bu lông vách theo lớp thép thật, bẻ cánh cục bộ, chân cột, `top_bend`, `corner_fix`, ghi scene |
 
 ## Khóa cấu hình tờ (`sheets.py`)
 | Khóa | Ý nghĩa |

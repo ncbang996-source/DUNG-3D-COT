@@ -251,3 +251,9 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
   gỡ được chạm), không vát thanh ngang mặt cột (`plan_end_cut`).
 - Thanh ngang xà L90x7 2840 (3-3) chìa qua 2 thanh cánh, đầu thanh không nằm trên thanh chủ: độ sâu theo chỗ cắt thanh cánh
   (NGOÀI áp mặt ngoài bản mã 123 trên thanh cánh).
+
+## Người dùng xác nhận (sau khi dựng DN-01)
+- Mối nối A-A DN-01: 2 thanh cánh thẳng mặt trong, lưng L100x7 lùi 2 mm, tấm d2 dưới bản nối ngoài d8 - ĐÃ XÁC NHẬN.
+- Vát 20x20 (1-1) / 60x60 (2-2) DN-01 ở đầu thanh chéo vách, chọn góc vát gỡ được chạm - ĐÃ XÁC NHẬN.
+- Thanh vách 1-1, 2-2 DN-02 có đầu chỉ đạt khe 2-5 mm (không đạt 10 mm bằng vát) - CHẤP NHẬN.
+- Vát góc cột (2 thanh mặt kề đâm nhau) - CHẤP NHẬN đề xuất.
