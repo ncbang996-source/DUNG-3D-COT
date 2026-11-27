@@ -188,3 +188,31 @@ Mô hình N122 tự động trước đó đã bỏ. Dựng lại riêng DT-02, 
   Bản mã nét khuất = bản mã 301/302 d10 của DN-02 (DN-02 vẽ nét liền ngoài cánh thanh cánh), BẺ GÓC theo đường gãy.
   3 bu lông M24 bắt bản mã vào phần đứng thanh cánh. Lỗ chờ (không đặt bu lông, lắp khi ráp DN-02): 4 lỗ M24 cho
   thanh ngang/xiên DN-02, 6 lỗ M20 nối thanh cánh DN-02.
+
+## Đoạn ngọn DN-02 (dựng: `bash tools/bvtc/build_n122.sh`)
+
+Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đường tim). Số liệu đọc từ tờ DN-02:
+- Đoạn thẳng đứng; z = 0 tại đường gãy thanh cánh (đầu dưới phần đứng DT-01). Tâm 2 thanh cánh cách 1890 (= phần đứng
+  DT-01). Số hiệu chi tiết DN-02 là 2xx, DT-01 là 3xx.
+- 2 kiểu mặt: mặt có xà (trước/sau, k = 0, 2: L90x7 dài 2840 chìa ra 2 bên + L60x5 chống, bản mã d8 có tai) và mặt bên
+  (k = 1, 3). Dựng 2 lần (tờ cấu hình `DN-02`, `DN-02s`) rồi ghép theo mặt (`combine_faces.py`).
+- Không dựng: L70x6 nghiêng chìa ra ngoài (thanh xà X1/X2 vẽ cụt), L70x6 chéo lên ở đỉnh (thanh DN-01). Lỗ của chúng
+  trên bản mã = lỗ chờ (báo `holes_waiting`). Ghi chú tờ: lỗ bu lông leo trên thanh 201, 203 - không thể hiện.
+- Thanh cánh: HL130x9 203/204 từ khe B-B (860 trên đường gãy) tới khe A-A (6240), HL130x9 201/202 từ A-A tới đỉnh 7568.
+- Mối nối B-B (chi tiết DN-02): thép góc nối trong HL130x9 (232) dài 670 vát góc lưng 12x12, bản nối ngoài d10 (233)
+  145x670, tấm d3 (231) 145x330. Chữ "HL130x12" trong hình B-B ghi nhầm: số hiệu 301 = HL150x12 (thanh cánh DT-01).
+  Tấm d3 rộng 145 (> cánh 130) nên nằm NGOÀI, dưới bản d10, trên lưng HL130x9 -> 2 thanh cánh thẳng MẶT TRONG, lưng
+  HL130x9 lùi vào 3 mm so với lưng HL150x12 (khác 3 mm so với đề xuất "lưng thẳng hàng" - suy ra từ kích thước chi tiết).
+- Mối nối A-A: thép góc nối trong HL120x8 (229) dài 730 vát góc 12x12, bản nối ngoài d10 (230) 100x690.
+- Bản mã 228/228a d10 ở chân (bẻ góc theo đường gãy): tấm đủ dựng ở DT-01; DN-02 chỉ giữ phần đứng (đánh dấu ext).
+- Bản mã: hình chi tiết nhận khi >= 75% lỗ trùng bu lông vẽ (<= 15 mm); tim bu lông lấy đúng vị trí trên mặt đứng.
+  Bản mã vẽ bằng nét LINE rời / bị thanh che đoạn dài: nối đầu nét gần nhất (<= 20 đơn vị), cạnh còn thiếu khép góc vuông.
+- Nét kích thước thẳng hàng mép thanh (L90x7 xà) bị đọc thành thanh dài ra: cắt thanh tại nét đầu thanh vẽ rõ.
+- Tấm đệm: số tấm theo khe (giữ chiều dày ghi; VD 4D.20_8 ở nút thanh cánh HL130x9 khe 9 -> 1 tấm 8); không ký hiệu ->
+  1-2 tấm dày 8/10 vừa khe; tấm dày hơn khe -> giảm chiều dày cho vừa.
+- Vách 1-1, 2-2, 3-3 (`dn_plans.py`, không cắt 1/4 rồi xoay vì vách không đối xứng 4 phía): 2 thanh chéo L60x5 suốt
+  góc - góc; nét liền chĩa LÊN đặt trên cánh ngang thanh chủ, nét khuất chĩa XUỐNG đặt dưới; tâm 1 bu lông + tấm đệm 6
+  (khe = chiều dày cánh thanh chủ: 7 ở 1-1, 2-2 -> ép 1). ĐỀ XUẤT: vát góc cánh chĩa xuống ở đầu thanh vách 1-1, 2-2
+  (25x55 .. 60x100) tránh thanh xiên mặt cột đi vào nút góc.
+- Ráp lên DT-02 + DT-01: khớp theo 24 bu lông chung (3 bu lông M24 bản mã 228 vào phần đứng x 8). Cao độ ráp 18,525 m;
+  đường gãy trong DT-01 thấp hơn 12 mm so với tờ DN-02 (DT-01 lấy theo đường tim).

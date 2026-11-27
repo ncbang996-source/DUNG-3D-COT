@@ -17,7 +17,7 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
 
 ## Dữ liệu
 - `data/n122/BVTC_COT_N122-3230.dxf` — bản vẽ chế tạo cột N122 (mọi tờ trong 1 file, toạ độ DXF, tỉ lệ 1/25,
-  chi tiết 1/10). Tờ: DT-02, DT-01 (đã dựng), DN-01, DN-02 (chưa).
+  chi tiết 1/10). Tờ: DT-02, DT-01, DN-02 (đã dựng), DN-01 (chưa).
 - `data/NC111-32.dxf` + PDF — dự án đầu (cột NC111-32 dựng từ 3DLINE), app gốc `web/`, `src/`.
 
 ## Chương trình
@@ -25,7 +25,9 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
   sườn chân cột, đặc thù tờ). Thêm tờ mới = thêm mục `SHEETS` rồi chạy, xem báo cáo `report.build`.
 - `tools/bvtc/bvtc_read.py` — đọc mặt đứng 2D thành thanh (nét mép, đường tâm, nét chiều dày, nhãn tiết diện).
 - `tools/bvtc/check_dt02.py` — kiểm tra va chạm (khớp đúng hình app dựng: khung lệch, vát, bẻ cánh, bẻ lệch).
-- `tools/bvtc/merge_segments.py` — ghép đoạn trên (cấu hình `on_top_of`) lên đoạn dưới thành 1 mô hình.
+- `tools/bvtc/merge_segments.py` — ghép đoạn trên lên đoạn dưới thành 1 mô hình (khớp bản mã nối + bu lông chung).
+- `tools/bvtc/combine_faces.py`, `tools/bvtc/dn_plans.py` — đoạn 2 kiểu mặt (DN-02): ghép mặt, dựng vách riêng.
+- `tools/bvtc/build_n122.sh` — dựng lại cả cột (DT-02, DT-01, DN-02), ghép, kiểm chạm, đóng gói HTML (~5 phút).
 - `tools/bvtc/render_regions.py` — cắt vùng DXF ra PNG để xem bản vẽ.
 - `tools/build_standalone.mjs` — đóng gói `web/` + scene JSON thành 1 file HTML (cần `npm install` một lần).
 - `tools/shot.mjs` — chụp mô hình từ HTML theo góc camera.
@@ -33,6 +35,7 @@ Người dùng là kỹ sư kết cấu, soát mô hình 3D theo bản vẽ ch�
 
 ## Lệnh
 ```bash
+bash tools/bvtc/build_n122.sh                   # toàn bộ: dựng + ghép + kiểm + HTML
 D=data/n122/BVTC_COT_N122-3230.dxf
 python3 tools/bvtc/dt02.py $D out DT-01          # hoặc DT-02 (~8-10 s; DXF đã phân tích lưu ở out/.cache)
 python3 tools/bvtc/check_dt02.py out/dt01_scene.json clash    # thép–thép: phải "cặp chạm: 0"
@@ -63,4 +66,5 @@ Mét; z = 0 tại đầu dưới thanh cánh (mặt trên bản đế); mặt tr
   Tim bu lông cách đầu ngoài thanh ngang 55, chạm thì tăng 5 mm/lần; góc thừa thì vát.
 - Vách giao nhau: thanh chĩa LÊN đặt trên thanh chủ, chĩa XUỐNG đặt sát mép dưới.
 - DT-01 đặt trên DT-02 (không bản đế); đỉnh DT-01 thanh cánh uốn thẳng đứng, bản mã DN-02 bẻ góc; bu lông đứng xỏ từ dưới lên.
+- DN-02: 2 kiểu mặt (mặt có xà trước/sau); không dựng thanh xà; mối nối B-B lưng HL130x9 lùi 3 mm (tấm d3 ngoài).
 - Chạm còn lại: vát góc (bội 5 mm, vừa đủ); cái bản vẽ không ghi thì ghi "ĐỀ XUẤT" và báo người dùng.

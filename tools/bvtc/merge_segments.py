@@ -19,11 +19,12 @@ def plate_center(pl):
     return o + a1 * P[:, 0].mean() + a2 * P[:, 1].mean()
 
 
-def main(lo_path, up_path, out_path):
+def main(lo_path, up_path, out_path, lo_sheet=None):
     lo, up = json.load(open(lo_path)), json.load(open(up_path))
-    lo_sheet = lo["title"].split()[2]
+    lo_sheet = lo_sheet or lo["title"].split()[2]
     ext = [p for p in up["plates"] if p.get("ext") == lo_sheet]
-    spl = [p for p in lo["plates"] if "mối nối với đoạn trên" in p.get("reason", "")]
+    spl = [p for p in lo["plates"] if "mối nối với đoạn trên" in p.get("reason", "")
+           or "phần trên (bẻ góc" in p.get("reason", "")]
     if not ext or not spl:
         raise SystemExit("không thấy bản mã nối để ráp (ext ở đoạn trên / mối nối ở đoạn dưới)")
     d = []
@@ -35,7 +36,21 @@ def main(lo_path, up_path, out_path):
         d.append(plate_center(q) - c)
     d = np.array(d)
     dz = float(np.median(d[:, 2]))
-    resid = d - np.array([0, 0, dz])
+    # tinh chỉnh theo bu lông chung 2 đoạn (cùng lỗ, cùng trục): chênh cao độ trung vị của các cặp gần nhau
+    lb = [b for b in lo["bolts"] if b["kind"] == "drawing"]
+    pairs = []
+    for b in up["bolts"]:
+        if b["kind"] != "drawing":
+            continue
+        q = np.array(b["p"]) + np.array([0, 0, dz])
+        for o in lb:
+            dv = np.array(o["p"]) - q
+            if np.linalg.norm(dv[:2]) < 0.015 and abs(dv[2]) < 0.06 and abs(np.dot(o["axis"], b["axis"])) > 0.99:
+                pairs.append(dv[2])
+    if len(pairs) >= 3:
+        dz += float(np.median(pairs))
+    n_pairs = len(pairs)
+    resid = d - np.array([0, 0, float(np.median(d[:, 2]))])
     shift = np.array([0, 0, dz])
 
     def sh(v):
@@ -63,19 +78,29 @@ def main(lo_path, up_path, out_path):
             p[k] = sh(p[k])
         plates.append(p)
     bolts = list(lo["bolts"])
+    P_lo = np.array([b["p"] for b in bolts]) if bolts else np.zeros((0, 3))
+    n_dup = 0
     for b in up["bolts"]:
         b = dict(b)
         b["p"] = sh(b["p"])
+        # cùng lỗ đã có bu lông ở đoạn dưới (VD 3 bu lông bản mã 228 vào phần đứng DT-01): giữ 1
+        if len(P_lo) and np.min(np.linalg.norm(P_lo - np.array(b["p"]), axis=1)) < 0.02 and \
+                any(np.linalg.norm(np.array(o["p"]) - np.array(b["p"])) < 0.02 and
+                    abs(np.dot(o["axis"], b["axis"])) > 0.99 for o in lo["bolts"]):
+            n_dup += 1
+            continue
         bolts.append(b)
     secs = dict(lo["sections"])
     secs.update(up["sections"])
     zs = [c for m in members for c in (m["p1"][2], m["p2"][2])]
     rep = {"ghep": {"doan_duoi": lo["title"], "doan_tren": up["title"], "cao_do_rap_m": round(dz, 4),
                     "lech_ngang_ban_ma_mm": round(float(np.abs(resid[:, :2]).max()) * 1000, 1),
-                    "lech_cao_ban_ma_mm": round(float(np.abs(resid[:, 2]).max()) * 1000, 1)},
+                    "lech_cao_ban_ma_mm": round(float(np.abs(resid[:, 2]).max()) * 1000, 1),
+                    "bu_long_trung_bo": n_dup, "cap_bu_long_khop": n_pairs},
            "z_range_m": [round(min(zs), 3), round(max(zs), 3)],
            "doan_duoi": lo["report"]["build"], "doan_tren": up["report"]["build"]}
-    title = "Cột N122: %s + %s (ghép)" % (lo["title"].split()[2], up["title"].split()[2])
+    nm = lambda t: t.split(":")[1].split("(")[0].strip() if t.startswith("Cột") else t.split()[2]
+    title = "Cột N122: %s + %s (ghép)" % (nm(lo["title"]), nm(up["title"]))
     out = {"title": title, "members": members, "sections": secs, "nodes": [], "plates": plates, "bolts": bolts,
            "report": {"total_mass_kg": round(sum(m.get("mass_kg", 0) for m in members), 1),
                       "orientation": lo["report"]["orientation"], "build": rep}}
@@ -84,4 +109,4 @@ def main(lo_path, up_path, out_path):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:5])
