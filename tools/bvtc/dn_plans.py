@@ -169,68 +169,108 @@ def main(dxf, sheet, scene_in, scene_out):
                 return True
         return False
     pec = T.CFG.get("plan_end_cut", {})
+    # Gỡ chạm đầu thanh vách (góp ý 20261127_1721): chỉ vát TAM GIÁC ở góc mép cánh, a <= nửa bề rộng cánh, bu lông còn đủ
+    # khoảng cách tới mép cắt (21 / 29 mm cho M16 / M20); được vát thanh vách HOẶC cánh thanh mặt cột (lấy phương án cắt
+    # ít nhất). Khe ưu tiên 10 mm, không đạt thì 5 mm, rồi vừa hết chạm. Vát ghi trên mặt cắt (DN-01: 20x20, 60x60) là
+    # cỡ lớn nhất cho phép (người dùng: 60x60 vát quá lố, bu lông thiếu khoảng cách tới mép).
+    allb = s["bolts"]
     for m in [x for x in s["members"] if x["rule"] == "plan"]:
         for key, ck in (("p1", "cut1"), ("p2", "cut2")):
             P_ = np.array(m[key])
             near = [o for o in faces if CK.seg_dist(P_, P_ + 1e-6, *CK.frame(o)[:2]) < 0.3]
-            n_ = pec.get(m["plan"])
-            if n_:
-                # vát ghi trên mặt cắt (VD DN-01 1-1 "vát cánh 20x20mm", 2-2 "60x60mm", mũi tên chỉ đầu thanh chéo ở
-                # góc vách): chọn góc vát (mép cánh nằm / góc lưng / cánh đứng) gỡ được chạm, ưu tiên đạt khe 10 mm
-                done = None
-                for gap_ in (GAP, 0.0):
-                    for fl_ in ("conn", "heel", "out"):
-                        m[ck] = {"flange": fl_, "a": n_, "b": n_}
-                        if not hits(m, near, gap_):
-                            done = (fl_, gap_)
-                            break
-                    if done:
-                        break
-                if done:
-                    m[ck]["note"] = "vát cánh %dx%dmm theo mặt cắt %s (%s)" % (
-                        n_, n_, m["plan"], {"conn": "góc mép cánh nằm", "heel": "góc lưng",
-                                            "out": "góc mép cánh đứng"}[done[0]])
-                    fixes.append({"plan": m["plan"], "side": m["side"], "vat_mm": f"{n_}x{n_} (bản vẽ, {done[0]})",
-                                  "khe_min_mm": round(done[1] * 1000)})
-                    continue
-                m.pop(ck, None)
-            if not hits(m, near):
+            if not hits(m, near, 0.0):
                 continue
+            spots_m = F.bolt_spots(m, S, allb)
             best = None
-            # khe mục tiêu 10 mm; không đạt (cánh nằm thanh vách cũng sát thép bên dưới) thì lấy khe lớn nhất đạt được.
-            # Tìm nhanh (fixes.EndContact + first_ok): chỉ lấy mẫu vùng đầu thanh, b nhỏ nhất tìm bằng chia đôi -
-            # cùng kết quả như thử lần lượt (vát lớn hơn chỉ bớt thép).
-            for gap_ in (GAP, 0.008, 0.006, 0.005, 0.004, 0.003, 0.002, 0.0):
-                m.pop(ck, None)
-                ec = F.EndContact(S, [(m, ck, o, None, 0.001 if o["id"] in m["host_ids"] else -gap_) for o in near])
-                for fl_ in ("out", "conn", "heel"):
-                    amax = 25 if fl_ == "heel" else 55          # góc lưng: không cắt tới lỗ bu lông (đường đinh 35)
-                    bmax = 150 if fl_ == "heel" else 395          # góc lưng: cánh còn lại lùi đúng b
-                    m[ck] = {"flange": fl_, "a": amax, "b": bmax}
-                    if ec.touching():
-                        continue                   # vát tối đa cũng không đạt khe này
-                    for A_ in range(10, amax + 5, 5):
-                        cand = [B_ for B_ in range(10, bmax + 5, 5) if not (best and A_ * B_ >= best[0])]
-
-                        def ok_b(B_, A_=A_, fl_=fl_):
-                            m[ck] = {"flange": fl_, "a": A_, "b": B_}
-                            return not ec.touching()
-                        B_ = F.first_ok(cand, ok_b)
-                        if B_ is not None:
-                            best = (A_ * B_, A_, B_, gap_, fl_)
+            for gap_ in (GAP, 0.005, 0.0):
+                eps = lambda o: 0.001 if o["id"] in m["host_ids"] else -gap_
+                cands = [(m, ck, spots_m, (lambda ec: (lambda: ec.touching()))(
+                    F.EndContact(S, [(m, ck, o, None, eps(o)) for o in near])))]
+                for o in near:
+                    if o["rule"] != "face" or o["id"] in m["host_ids"]:
+                        continue
+                    so = CK.samples(o, S)
+                    hh = so[CK.where_v(m, S, so, eps(o)) > 0]
+                    if not len(hh):
+                        sm = CK.samples(m, S)
+                        hh = sm[CK.where_v(o, S, sm, eps(o)) > 0]
+                    if not len(hh):
+                        continue
+                    cp = hh.mean(0)
+                    ko = "cut1" if np.linalg.norm(np.array(o["p1"]) - cp) < np.linalg.norm(np.array(o["p2"]) - cp) else "cut2"
+                    rest = [x for x in near if x is not o]
+                    if hits(m, rest, gap_):
+                        continue                        # còn chạm thanh khác: vát riêng thanh mặt cột không đủ
+                    cands.append((o, ko, F.bolt_spots(o, S, allb), (lambda ec: (lambda: ec.touching()))(
+                        F.EndContact(S, [(o, ko, m, None, eps(o))]))))
+                lim = pec.get(m["plan"])
+                best = F.tri_search(cands, S, amax_frac=min(0.5, (lim or 999) / S[m["section"]]["b"]))
                 if best:
                     break
-            if best:
-                m[ck] = {"flange": best[4], "a": best[1], "b": best[2],
-                         "note": "vát góc %s %dx%dmm (ĐỀ XUẤT - khe >= %d mm với thép quanh góc vách)"
-                                 % ({"out": "cánh còn lại", "conn": "mép cánh nằm", "heel": "lưng"}[best[4]],
-                                    best[1], best[2],
-                                    round(best[3] * 1000))}
-                fixes.append({"plan": m["plan"], "side": m["side"], "vat_mm": f"{best[1]}x{best[2]} ({best[4]})",
-                              "khe_min_mm": round(best[3] * 1000)})
+            shift_ = 0
+            if not best:
+                # vát tam giác không gỡ được (đầu thanh đâm cả cánh còn lại vào cánh đứng thanh mặt cột): dời bu lông
+                # đầu thanh + đầu thanh vào trong dọc trục thanh (bước 5 mm) - bu lông vẫn trên cánh nằm thanh chủ, đủ
+                # khoảng cách tới mép (góp ý: chỉnh trục bu lông để thanh không cấn thép, vát góc nếu cần)
+                P0 = np.array(m[key])
+                uo = P0 - np.array(m["p2" if key == "p1" else "p1"])
+                uo = uo / np.linalg.norm(uo)
+                bi = min(range(len(allb)), key=lambda i: np.linalg.norm(np.array(allb[i]["p"])[:2] - (P0 - uo * 0.03)[:2])
+                         + 9 * (allb[i]["kind"] != "plan"))
+                b0 = dict(allb[bi])
+                hosts_ = [o for o in near if o["id"] in m["host_ids"]]
+                for sh in range(5, 45, 5):
+                    m[key] = (P0 - uo * sh / 1000).round(5).tolist()
+                    nb = dict(b0, p=(np.array(b0["p"]) - np.array([uo[0], uo[1], 0]) * sh / 1000).round(5).tolist())
+                    edge_ok = True
+                    for h_ in hosts_:
+                        for x_, w_, fl_, d_ in F.bolt_spots(h_, S, [nb]):
+                            if w_ > S[h_["section"]]["b"] - F.EDGE.get(d_, 21):
+                                edge_ok = False
+                    if not edge_ok:
+                        break
+                    for gap_ in (GAP, 0.005, 0.0):
+                        if not hits(m, near, gap_):
+                            best, shift_ = (0, m, ck, None), sh
+                            break
+                        cands = [(m, ck, F.bolt_spots(m, S, [nb] + allb), (lambda ec: (lambda: ec.touching()))(
+                            F.EndContact(S, [(m, ck, o, None, 0.001 if o["id"] in m["host_ids"] else -gap_)
+                                             for o in near])))]
+                        best = F.tri_search(cands, S, amax_frac=0.5)
+                        if best:
+                            shift_ = sh
+                            break
+                    if best:
+                        allb[bi] = nb
+                        break
+                if not best:
+                    m[key] = P0.round(5).tolist()
+                else:
+                    m["length"] = round(float(np.linalg.norm(np.array(m["p2"]) - np.array(m["p1"]))), 4)
+                    m.setdefault("notes", []).append("dời bu lông + đầu thanh vào %d mm (ĐỀ XUẤT - tránh cấn thép)" % shift_)
+            heel_ = False
+            if not best:
+                # cuối cùng: vát góc lưng nhỏ nhất (cánh còn lại lùi b) - CẦN NGƯỜI DÙNG XEM
+                for gap_ in (0.0,):
+                    cands = [(m, ck, spots_m, (lambda ec: (lambda: ec.touching()))(
+                        F.EndContact(S, [(m, ck, o, None, 0.001) for o in near])))]
+                    best = F.tri_search(cands, S, flanges=("heel",), bmax=150)
+                    heel_ = bool(best)
+            if best and best[3] is None:
+                fixes.append({"plan": m["plan"], "side": m["side"], "doi_bu_long_mm": shift_, "khe_min_mm": round(gap_ * 1000)})
+            elif best:
+                _, mm, kk, cut = best
+                cut["note"] = "vát %s %dx%dmm (ĐỀ XUẤT - khe >= %d mm, giữ khoảng cách bu lông tới mép%s)" % (
+                    {"out": "tam giác cánh còn lại", "conn": "tam giác mép cánh liên kết",
+                     "heel": "góc lưng (cánh còn lại lùi b) - CẦN XEM: vát tam giác / dời bu lông không gỡ được"}[cut["flange"]],
+                    cut["a"], cut["b"],
+                    round(gap_ * 1000), "; bản vẽ ghi %dx%d" % (pec[m["plan"]], pec[m["plan"]]) if pec.get(m["plan"]) else "")
+                mm[kk] = cut
+                fixes.append({"plan": m["plan"], "side": m["side"], "vat_thanh": "vách" if mm is m else
+                              "mặt cột %s" % mm["section"], "vat_mm": "%dx%d %s" % (cut["a"], cut["b"], cut["flange"]),
+                              "khe_min_mm": round(gap_ * 1000), **({"doi_bu_long_mm": shift_} if shift_ else {})})
             else:
-                m.pop(ck, None)
-                fixes.append({"plan": m["plan"], "side": m["side"], "loi": "không gỡ được"})
+                fixes.append({"plan": m["plan"], "side": m["side"], "loi": "không gỡ được bằng vát tam giác"})
     rep["vat_goc"] = fixes
     s["report"]["build"]["vach_dn"] = rep
     json.dump(s, open(scene_out, "w"), ensure_ascii=False)

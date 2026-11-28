@@ -283,3 +283,21 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
 - ĐỀ XUẤT (gỡ chạm): X206 đầu trên vát góc lưng 10x10 (cánh còn lại lùi 10); L50x4 (6-6) vát 15x5 góc lưng / 10x5 mép.
 - CHƯA RÕ (hỏi người dùng): 2 lỗ to ở tai bản X213 ngoài lưng biên (lỗ treo?), 2 lỗ trên biên dưới sát đầu xà ngoài
   X213, 2 lỗ giữa L75x6 - hiện để lỗ không bắt bu lông.
+
+## Đợt góp ý gop_y_DT-02_20261127_1721 (16 ý + 3 câu trả lời về lỗ xà) - quy tắc rút ra
+- Lỗ chỉ qua 1 lớp thép ở xà X2 = lỗ treo (người dùng xác nhận): tai bản X213 -> bu lông M20 treo chuỗi sứ; 2 lỗ biên
+  dưới sát đầu xà + 2 lỗ giữa L75x6 -> bu lông M20 treo chuỗi đỡ lèo dây dẫn (kind "treo").
+- Vát góc (gỡ chạm, đề xuất): CHỈ vát TAM GIÁC ở góc mép cánh (không vát vuông / chữ nhật / cắt lùi cả cánh), vừa đủ,
+  a <= nửa bề rộng cánh (75% với cánh còn lại không có lỗ); bu lông còn đủ khoảng cách tới mép cắt (21 / 29 / 32 mm
+  M16 / M20 / M24, không kém hiện trạng); được vát cánh thanh mặt cột thay vì cắt nhiều thanh vách (lấy phương án cắt ít
+  nhất); mỗi đầu thanh tối đa 2 vát tam giác (cut1 + cut1b ở 2 cánh). Vát ghi trên mặt cắt (DN-01 60x60) là cỡ lớn nhất.
+  Không vát được -> dời bu lông + đầu thanh vào trong dọc trục (bước 5 mm, giữ khoảng cách mép trên thanh chủ); cuối
+  cùng mới vát góc lưng (DN-01 1-1: 1 đầu 25x30 - CẦN XEM).
+- Trục bu lông vách 1-1 DT-02 đặt GIỮA cánh nằm thanh mặt cột (30 trên L60) - đường đinh vẽ sát lưng làm thanh vách cấn.
+- Kiểm thêm: đầu bu lông + vòng đệm (r 0,9d, cao 0,7d+3), đai ốc (0,8d+3) + đuôi ren, thân bu lông cấn thép
+  (check_dt02 "bolts" / "all"). Gỡ: bu lông có thanh trên trục -> xếp lại lớp kẹp (khe <= 10 mm giữa 2 đoạn ghép -> tấm
+  đệm vừa khe); thanh khác cấn -> vát tam giác đầu thanh (tools/bvtc/hoan_thien.py).
+- Thanh vách thò ra ngoài mặt lưng thanh mặt cột -> vát tam giác phần thò.
+- Ghép DN-01: bản mã đoạn dưới phía trên mặt cắt mà đoạn trên không vẽ (219/220 ở cao độ L70x6 1710) -> giữ, đầu thanh
+  DN-01 áp mặt ngoài thanh cánh đẩy ra đúng chiều dày bản mã; bu lông trùng lỗ giữ bản kẹp nhiều lớp hơn.
+- App: bản mã có chỗ lõm (123, 226) chia tam giác đúng hình (trước tô lấp chỗ lõm).

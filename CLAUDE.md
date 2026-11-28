@@ -74,8 +74,12 @@ Mét; z = 0 tại đầu dưới thanh cánh (mặt trên bản đế); mặt tr
 - Vách giao nhau: thanh chĩa LÊN đặt trên thanh chủ, chĩa XUỐNG đặt sát mép dưới.
 - DT-01 đặt trên DT-02 (không bản đế); đỉnh DT-01 thanh cánh uốn thẳng đứng, bản mã DN-02 bẻ góc; bu lông đứng xỏ từ dưới lên.
 - DN-02: 2 kiểu mặt (mặt có xà trước/sau); không dựng thanh xà; mối nối B-B lưng HL130x9 lùi 3 mm (tấm d3 ngoài).
-- Chạm còn lại: vát góc (bội 5 mm, vừa đủ); cái bản vẽ không ghi thì ghi "ĐỀ XUẤT" và báo người dùng.
+- Chạm còn lại: vát TAM GIÁC góc mép cánh (bội 5 mm, vừa đủ, không vát vuông/chữ nhật), giữ khoảng cách bu lông tới
+  mép cắt; có thể vát cánh thanh kia; không được thì dời bu lông + đầu thanh dọc trục. Bản vẽ không ghi -> "ĐỀ XUẤT".
+- Kiểm cả đầu / đai ốc / thân bu lông cấn thép (check_dt02 ... all); bước hoàn thiện: tools/bvtc/hoan_thien.py.
 - 3 thanh giao nhau: ít nhất 1 thanh chạy thẳng (DT-02 nút giữa: thanh xiên dừng ở bản mã -> thanh ngang liền).
-- Vát góc thanh vách: khe >= 10 mm với thép quanh góc (trừ thanh chủ). Vát góc cột tính lại sau khi ghép 2 kiểu mặt.
+- Vát góc thanh vách: ưu tiên khe 10 mm nếu đạt bằng vát tam giác hợp lệ, không thì 5 / 0. Vát góc cột tính lại sau
+  khi ghép 2 kiểu mặt.
+- Xà X2 (tools/bvtc/xa.py): 3 cao độ, lưng mặt xà +-1025; lỗ chỉ qua 1 lớp = bu lông M20 treo (chuỗi sứ / đỡ lèo).
 - Phần xà dựng sau: bỏ thanh xiên/chống của xà; giữ thanh ngang mặt cột đủ dài + bản mã có tai (lỗ chờ).
 - DN-01 thay phần trùng trên mối nối A-A của DN-02, trừ thanh 214 (L80x6) và 234 (L70x6) giữ theo DN-02.

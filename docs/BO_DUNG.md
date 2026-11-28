@@ -33,6 +33,7 @@ data/n122/*.json + dist/*.html (build_standalone.mjs)
 | `dn_plans.py` | Vách ngang đoạn 2 kiểu mặt (thanh chéo góc–góc, bu lông, tấm đệm tâm, vát đầu thanh khe 10 mm) |
 | `merge_segments.py` | Ghép đoạn trên lên đoạn dưới; `--replace-above` (DN-01 thay đỉnh DN-02, giữ 214/234) |
 | `xa.py` | Xà X2: đọc mặt đứng + 3-3 + 4-4 + 6-6 tờ xà, đặt thanh theo quy tắc áp sát, bản mã khớp chi tiết theo lỗ, bu lông xếp lớp theo hình học, đối xứng, 3 cao độ, vát góc gỡ chạm |
+| `hoan_thien.py` | Bước hoàn thiện mỗi đoạn + mô hình ghép (`--ghep`): thanh vách thò ra ngoài mặt lưng, bu lông cấn thép (xếp lại lớp kẹp + tấm đệm vừa khe, vát tam giác) |
 | `clash_sum.py` | Tóm tắt kiểm chạm theo loại cặp (thanh xà / tiết diện) |
 | `build.py` | Điều phối dựng tăng dần |
 

@@ -489,7 +489,7 @@ def main(dxf, scene_in, scene_out):
     # gỡ chạm còn lại trong xà: vát góc đầu thanh xà (bội 5 mm, diện tích nhỏ nhất) - ĐỀ XUẤT
     vat = []
     near = lambda a, b: CK.seg_dist(*CK.frame(a)[:2], *CK.frame(b)[:2]) < 0.15
-    for m in new_m:
+    for m in [x for _pass in range(3) for x in new_m]:      # lặp: dời đầu thanh này có thể sinh chạm ở đầu kia
         if m.get("mark") in ("X201", "X203"):
             continue                                         # biên giữ nguyên, vát thanh bắt vào biên
         oth = [o for o in allm if o is not m and near(m, o)]
@@ -510,30 +510,64 @@ def main(dxf, scene_in, scene_out):
         for key, hs in ends.items():
             if m.get(key):
                 continue
-            ec = F.EndContact(S, [(m, key, x, None, 0.001) for x in hs])
-            best = None
-            bw = T.sec(m["section"])["b"]
-            gm = m["g"][0]
-            for fl in ("out", "conn", "heel"):
-                # cánh còn lại: cho cắt hết bề rộng (= cánh còn lại lùi b mm); cánh liên kết: chừa mép có lỗ;
-                # góc lưng (cánh còn lại lùi b + vát mép lưng cánh liên kết a): a không tới lỗ (đường đinh - 12)
-                amax = int(bw) if fl == "out" else int(bw) - 5 if fl == "conn" else int(gm) - 5
-                for A in range(5, amax + 1, 5):
-                    cand = [B for B in range(5, 205, 5) if not (best and A * B >= best[0])]
-
-                    def ok(B, A=A, fl=fl):
-                        m[key] = {"flange": fl, "a": A, "b": B}
-                        return not ec.touching()
-                    B = F.first_ok(cand, ok)
-                    if B is not None:
-                        best = (A * B, A, B, fl)
-            m.pop(key, None)
-            if best:
-                m[key] = {"flange": best[3], "a": best[1], "b": best[2],
-                          "note": "vát góc %s %dx%dmm (ĐỀ XUẤT - tránh chạm %s)" % (
-                              {"out": "cánh còn lại", "conn": "mép cánh liên kết", "heel": "lưng"}[best[3]], best[1], best[2],
-                              "/".join(sorted({x.get("mark") or x["section"] for x in hs})))}
-            vat.append((m.get("mark") or m["section"], m["xa_view"], "%sx%s %s" % (best[1], best[2], best[3]) if best else "không gỡ được"))
+            # bu lông của thanh (chưa xếp lớp): dùng trục vẽ, xuyên +-40 mm quanh mặt tham chiếu
+            pb = [{"p": (b[0] - b[1] * 0.04).tolist(), "axis": b[1].tolist(), "grip_mm": 80, "d_mm": b[2]} for b in new_b]
+            spots = F.bolt_spots(m, S, pb)
+            touch = (lambda ec: (lambda: ec.touching()))(F.EndContact(S, [(m, key, x, None, 0.001) for x in hs]))
+            best = F.tri_search([(m, key, spots, touch)], S)              # 1. vát tam giác (góp ý: không vát vuông)
+            how = "tam giác"
+            if not best:
+                # 2. dời bu lông đầu thanh + đầu thanh vào trong dọc trục (bước 5 mm), bu lông vẫn đủ khoảng cách mép
+                pk = "p1" if key == "cut1" else "p2"
+                P0 = np.array(m[pk])
+                uo = P0 - np.array(m["p2" if pk == "p1" else "p1"])
+                uo = uo / np.linalg.norm(uo)
+                bi = min(range(len(new_b)), key=lambda i: np.linalg.norm(np.cross(new_b[i][0] - (P0 - uo * 0.03),
+                                                                                  new_b[i][1])))
+                b0 = new_b[bi]
+                orig = {id(x): F.bolt_spots(x, S, [pb[bi]]) for x in allm if near(x, m)}
+                for sh in range(5, 30, 5):
+                    m[pk] = (P0 - uo * sh / 1000).round(5).tolist()
+                    nb = (b0[0] - uo * sh / 1000,) + tuple(b0[1:])
+                    pbn = {"p": (nb[0] - nb[1] * 0.04).tolist(), "axis": nb[1].tolist(), "grip_mm": 80, "d_mm": nb[2]}
+                    ok_e = True
+                    for x in allm:
+                        if x is m or not near(x, m):
+                            continue
+                        for (xx, w, fl, d), o0 in zip(F.bolt_spots(x, S, [pbn]), orig.get(id(x), []) or [None]):
+                            bw_ = S[x["section"]]["b"]
+                            lim = min(F.EDGE.get(d, 21), bw_ - o0[1]) if o0 else F.EDGE.get(d, 21)
+                            if bw_ - w < lim - 0.5:
+                                ok_e = False
+                    if not ok_e:
+                        break
+                    ec2 = F.EndContact(S, [(m, key, x, None, 0.001) for x in hs])
+                    if not ec2.touching():
+                        best, how = (0, m, key, None), "dời bu lông %d mm" % sh
+                    else:
+                        spots2 = F.bolt_spots(m, S, [pbn] + pb)
+                        best = F.tri_search([(m, key, spots2, (lambda ec: (lambda: ec.touching()))(ec2))], S)
+                        how = "dời bu lông %d mm + tam giác" % sh
+                    if best:
+                        new_b[bi] = nb
+                        m["length"] = round(float(np.linalg.norm(np.array(m["p2"]) - np.array(m["p1"]))), 4)
+                        m.setdefault("notes", []).append("dời bu lông + đầu thanh vào %d mm (ĐỀ XUẤT - tránh cấn thép)" % sh)
+                        break
+                if not best:
+                    m[pk] = P0.round(5).tolist()
+            if not best:
+                best = F.tri_search([(m, key, spots, touch)], S, flanges=("heel",), bmax=150)   # 3. góc lưng - CẦN XEM
+                how = "góc lưng (CẦN XEM)"
+            if best and best[3]:
+                cut = best[3]
+                cut["note"] = "vát %s %dx%dmm (ĐỀ XUẤT - tránh chạm %s)" % (
+                    {"out": "tam giác cánh còn lại", "conn": "tam giác mép cánh liên kết",
+                     "heel": "góc lưng (cánh còn lại lùi b) - CẦN XEM"}[cut["flange"]], cut["a"], cut["b"],
+                    "/".join(sorted({x.get("mark") or x["section"] for x in hs})))
+                best[1][best[2]] = cut
+            vat.append((m.get("mark") or m["section"], m["xa_view"],
+                        (how + (" %sx%s %s" % (best[3]["a"], best[3]["b"], best[3]["flange"]) if best[3] else ""))
+                        if best else "không gỡ được"))
     # bỏ dòng "không gỡ được" nếu chỗ đó đã hết chạm (do vát thanh kia)
     def still(mk, view):
         for m in new_m:
@@ -565,6 +599,20 @@ def main(dxf, scene_in, scene_out):
                 min(abs(G[0][0]), abs(max(x[1] for x in G))))
         names = [r[2] for r in g]
         if len(names) < 2:
+            # lỗ chỉ qua 1 lớp thép = lỗ treo (người dùng xác nhận): tai bản X213 -> bu lông M20 treo chuỗi sứ; lỗ trên
+            # biên dưới sát đầu xà và 2 lỗ giữa L75x6 -> bu lông M20 treo chuỗi đỡ lèo dây dẫn
+            if len(names) == 1:
+                s0, s1 = g[0][0], g[0][1]
+                if any(np.linalg.norm(np.array(b["p"]) - (p0 + ax * s0)) < 0.004 for b in bolts_out):
+                    continue                                   # lỗ vẽ 2 vòng chồng nhau: 1 bu lông
+                grip = (s1 - s0) * 1000
+                L = next((x for x in Ls if x >= grip + 0.8 * d + 7), None) or int(math.ceil((grip + 0.8 * d + 7) / 10) * 10)
+                bolts_out.append({"id": 0, "p": np.round(p0 + ax * s0, 5).tolist(), "axis": np.round(ax, 6).tolist(),
+                                  "nut": np.round(ax, 6).tolist(), "d_mm": d, "grip_mm": round(grip, 1), "L_mm": L,
+                                  "L_from": "ký hiệu bản vẽ" if Ls else "tính", "t_mm": 8, "kind": "treo",
+                                  "lop": names, "note": "bu lông treo chuỗi sứ" if "X213" in names[0]
+                                  else "bu lông treo chuỗi đỡ lèo dây dẫn"})
+                continue
             waiting.append({"p": np.round(p0, 3).tolist(), "nguon": view, "lop": names})
             continue
         s0, s1 = g[0][0], max(x[1] for x in g)
@@ -618,6 +666,7 @@ def main(dxf, scene_in, scene_out):
     rep["ban_ma_xa"] = len(new_p)
     rep["bu_long_xa"] = len(bolts_out)
     rep["bu_long_than_thay"] = removed
+    rep["bu_long_treo"] = sum(1 for b in bolts_out if b["kind"] == "treo")
     rep["lo_khong_bat"] = len(waiting)
     rep["lo_khong_bat_mau"] = waiting[:12]
     sc["title"] = sc["title"].replace("(ghép)", "+ xà X2 (ghép)")

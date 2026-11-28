@@ -13,6 +13,7 @@ SHEETS = {
             "4-4": (-122015.4, (-1875, -122170, -1805, -122092)),
         },
         "level_cut": {"1-1": 30, "2-2": 45, "3-3": 30, "4-4": 30},
+        "plan_gauge_center": ["1-1"],              # góp ý: trục bu lông vách 1-1 ở giữa cánh nằm thanh mặt cột
         "foot_diag_cut": True,                         # ghi chú vát 40x60 đầu dưới thanh xiên chính (tờ DT-02)
         "top_splice": {"plate_t": 10},                 # bản mã nối d10 ở đỉnh (chi tiết + hình cắt A-A)
         "base": {

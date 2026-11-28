@@ -25,7 +25,7 @@ def frame(m):
 
 def cut_removed(m, x, L, fl, w, b):
     """Điểm (x dọc thanh, w ngang cánh từ lưng) trên cánh fl có nằm trong phần vát không."""
-    for key, x0 in (("cut1", x), ("cut2", L - x)):
+    for key, x0 in (("cut1", x), ("cut1b", x), ("cut2", L - x), ("cut2b", L - x)):
         c = m.get(key)
         if not c or x0 >= c["b"] / 1000:
             continue
@@ -214,7 +214,7 @@ def _where_v(m, S, Q, eps=0.0015):
 
     def cutmask(fl, w):
         r = np.zeros(len(Q), bool)
-        for key, x0 in (("cut1", x), ("cut2", L - x)):
+        for key, x0 in (("cut1", x), ("cut1b", x), ("cut2", L - x), ("cut2b", L - x)):
             cc = m.get(key)
             if not cc:
                 continue
@@ -237,7 +237,7 @@ def _where_v(m, S, Q, eps=0.0015):
 def cut_mask(m, x, L, fl, w, b):
     """Bản véc-tơ của cut_removed: x, w là mảng cùng kích thước."""
     r = np.zeros(np.broadcast(x, w).shape, bool)
-    for key, x0 in (("cut1", x), ("cut2", L - x)):
+    for key, x0 in (("cut1", x), ("cut1b", x), ("cut2", L - x), ("cut2b", L - x)):
         c = m.get(key)
         if not c:
             continue
@@ -252,7 +252,8 @@ def cut_mask(m, x, L, fl, w, b):
 
 
 _SAMPLE_CACHE = {}
-_GEOM_KEYS = ("p1", "p2", "poff1", "poff2", "e1", "e2", "frames", "g", "section", "cut1", "cut2", "bends", "prof",
+_GEOM_KEYS = ("p1", "p2", "poff1", "poff2", "e1", "e2", "frames", "g", "section", "cut1", "cut2", "cut1b", "cut2b",
+              "bends", "prof",
               "prof_n", "rule")
 
 
@@ -403,6 +404,70 @@ if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "plates":
         print(r)
 
 
+def bolt_body_points(b, shank=False):
+    """Điểm mẫu phần đầu bu lông (+ vòng đệm) và đai ốc (+ vòng đệm, đuôi ren) - phần nằm NGOÀI các lớp thép kẹp.
+    Bán kính 0,9 d (lục giác / vòng đệm), đầu cao 0,7 d + 3, đai ốc 0,8 d + 3 + đuôi ren."""
+    d = b.get("d_mm", 16) / 1000
+    p = np.array(b["p"], float)
+    ax = np.array(b.get("nut") or b["axis"], float)
+    ax = ax / np.linalg.norm(ax)
+    g = (b.get("grip_mm") or 20) / 1000
+    L = max((b.get("L_mm") or 0) / 1000, g + 0.8 * d + 0.003)
+    t1 = np.cross(ax, [0, 0, 1.0]) if abs(ax[2]) < 0.9 else np.cross(ax, [1.0, 0, 0])
+    t1 = t1 / np.linalg.norm(t1)
+    t2 = np.cross(ax, t1)
+    pts = []
+    parts = ((-(0.7 * d + 0.003), -0.001, 0.9 * d), (g + 0.001, g + 0.8 * d + 0.003, 0.9 * d), (g + 0.001, L, 0.5 * d))
+    if shank:
+        parts = ((0.001, g - 0.001, 0.5 * d),)
+    for s0, s1, r in parts:
+        for sv in np.linspace(s0, s1, 4):
+            for rr in (r * 0.5, r):
+                for a in np.linspace(0, 2 * np.pi, 12, endpoint=False):
+                    pts.append(p + ax * sv + t1 * rr * np.cos(a) + t2 * rr * np.sin(a))
+    return np.array(pts)
+
+
+def bolt_steel(s, S):
+    """Đầu / đai ốc bu lông cấn thép (thanh hoặc bản mã)."""
+    res = []
+    ms = s["members"]
+    A1 = np.array([frame(m)[0] for m in ms])
+    A2 = np.array([frame(m)[1] for m in ms])
+    for i, b in enumerate(s["bolts"]):
+        if b["kind"] in ("neo",):
+            continue
+        Q = bolt_body_points(b)
+        c = Q.mean(0)
+        ab = A2 - A1
+        t = np.clip(np.einsum("ij,ij->i", c - A1, ab) / np.einsum("ij,ij->i", ab, ab), 0, 1)
+        dn = np.linalg.norm(c - (A1 + ab * t[:, None]), axis=1)
+        Qs = bolt_body_points(b, shank=True)
+        p0 = np.array(b["p"], float)
+        axv = np.array(b.get("nut") or b["axis"], float)
+        Qa = p0 + np.outer(np.linspace(0.0005, (b.get("grip_mm") or 20) / 1000 - 0.0005, 9), axv)
+        for j in np.nonzero(dn < 0.25)[0]:
+            n = int(np.sum(where_v(ms[j], S, Q, 0.0005) > 0))
+            if n:
+                res.append({"bolt": i, "d": b.get("d_mm"), "m": ms[j]["id"], "sec": ms[j]["section"], "loai": "đầu/đai ốc",
+                            "side": ms[j].get("side"), "n": n, "at": np.round(b["p"], 3).tolist()})
+            # thân bu lông: thanh không phải lớp kẹp (trục bu lông không qua cánh) mà mép thanh lấn vào thân bu lông
+            if not np.any(where_v(ms[j], S, Qa, 0.0) > 0):
+                n2 = int(np.sum(where_v(ms[j], S, Qs, 0.0005) > 0))
+                if n2:
+                    res.append({"bolt": i, "d": b.get("d_mm"), "m": ms[j]["id"], "sec": ms[j]["section"],
+                                "loai": "thân", "side": ms[j].get("side"), "n": n2, "at": np.round(b["p"], 3).tolist()})
+    return res
+
+
+if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "bolts":
+    s, S = load(sys.argv[1])
+    res = bolt_steel(s, S)
+    print("bu lông cấn thép:", len(res))
+    for r in res[:30]:
+        print(r)
+
+
 if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "all":
     # 1 lần nạp: bu lông xuyên dọc cánh (đã in ở trên) + thép-thép + bản mã-thép, chỉ in số lượng + 10 dòng đầu
     s, S = load(sys.argv[1])
@@ -412,5 +477,9 @@ if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "all":
         print(r)
     res = plate_clashes(s, S)
     print("bản mã chạm thép:", len(res))
+    for r in res[:10]:
+        print(r)
+    res = bolt_steel(s, S)
+    print("bu lông cấn thép:", len(res))
     for r in res[:10]:
         print(r)

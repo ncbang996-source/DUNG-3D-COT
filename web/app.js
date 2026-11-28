@@ -160,10 +160,12 @@ function buildCutGeometry(m) {
     // đa giác trong mặt (x dọc thanh, w ngang cánh từ lưng tới mép)
     const W = s.b;
     let poly = [[0, 0], [L, 0], [L, W], [0, W]];
-    const c1 = m.cut1 && m.cut1.flange === fl ? m.cut1 : null, c2 = m.cut2 && m.cut2.flange === fl ? m.cut2 : null;
+    // mỗi đầu thanh tối đa 2 vát (cut1 + cut1b ở 2 cánh khác nhau)
+    const pick = (a, b, f) => (a && a.flange === f ? a : (b && b.flange === f ? b : null));
+    const c1 = pick(m.cut1, m.cut1b, fl), c2 = pick(m.cut2, m.cut2b, fl);
     // vát góc LƯNG (flange 'heel'): cánh liên kết cắt tam giác a x b ở góc lưng; cánh còn lại (gắn ở lưng) bị
     // đường cắt đi qua nên lùi đầu thanh b mm
-    const h1 = m.cut1 && m.cut1.flange === 'heel' ? m.cut1 : null, h2 = m.cut2 && m.cut2.flange === 'heel' ? m.cut2 : null;
+    const h1 = pick(m.cut1, m.cut1b, 'heel'), h2 = pick(m.cut2, m.cut2b, 'heel');
     poly = [];
     if (h1 && fl === 'conn') poly.push([0, h1.a], [h1.b, 0]); else poly.push([h1 ? h1.b : 0, 0]);
     if (h2 && fl === 'conn') poly.push([L - h2.b, 0], [L, h2.a]); else poly.push([h2 ? L - h2.b : L, 0]);
@@ -199,7 +201,7 @@ function buildCutGeometry(m) {
 }
 
 function buildGeometry(m) {
-  if (m.cut1 || m.cut2 || (m.bends && m.bends.length) || m.prof) return buildCutGeometry(m);
+  if (m.cut1 || m.cut2 || m.cut1b || m.cut2b || (m.bends && m.bends.length) || m.prof) return buildCutGeometry(m);
   const s = sections[m.section];
   const chamfer = !!(m.chamfer1 || m.chamfer2);
   // thanh vát: phần cánh không khoan lỗ cao hơn h0 = t + r1 dựng riêng (hình thang), profile cắt tại h0
@@ -317,7 +319,9 @@ function buildPlates() {
     const push = (...vs) => vs.forEach((v) => pos.push(v.x, v.y, v.z));
     const n = P.length;
     for (let i = 0; i < n; i++) { const j = (i + 1) % n; push(P[i], P[j], Q[j], P[i], Q[j], Q[i]); }
-    for (let i = 1; i < n - 1; i++) { push(P[0], P[i], P[i + 1]); push(Q[0], Q[i + 1], Q[i]); }
+    // mặt bản mã: chia tam giác đúng hình (bản mã có chỗ lõm/bậc như 123, 226 - chia "quạt" sẽ tô lấp chỗ lõm)
+    const tris = THREE.ShapeUtils.triangulateShape(pl.poly.map(([x, y]) => new THREE.Vector2(x, y)), []);
+    for (const [a, b, c] of tris) { push(P[a], P[b], P[c]); push(Q[a], Q[c], Q[b]); }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();

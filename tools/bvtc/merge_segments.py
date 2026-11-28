@@ -8,6 +8,7 @@ Phần "ext" của đoạn trên bỏ (đoạn dưới đã có); bu lông mối
 chờ phía trên).
 """
 import json
+import math
 import sys
 
 import numpy as np
@@ -84,11 +85,15 @@ def main(lo_path, up_path, out_path, lo_sheet=None):
         b = dict(b)
         b["p"] = sh(b["p"])
         # cùng lỗ đã có bu lông ở đoạn dưới (VD 3 bu lông bản mã 228 vào phần đứng DT-01): giữ 1
-        if len(P_lo) and np.min(np.linalg.norm(P_lo - np.array(b["p"]), axis=1)) < 0.02 and \
-                any(np.linalg.norm(np.array(o["p"]) - np.array(b["p"])) < 0.02 and
-                    abs(np.dot(o["axis"], b["axis"])) > 0.99 for o in lo["bolts"]):
-            n_dup += 1
-            continue
+        if len(P_lo) and np.min(np.linalg.norm(P_lo - np.array(b["p"]), axis=1)) < 0.02:
+            dup = next((j for j, o in enumerate(bolts) if np.linalg.norm(np.array(o["p"]) - np.array(b["p"])) < 0.02 and
+                        abs(np.dot(o["axis"], b["axis"])) > 0.99), None)
+            if dup is not None:
+                n_dup += 1
+                # giữ bản kẹp nhiều lớp hơn (VD 3 bu lông M24 bản mã 228: DN-02 có cả đầu thanh xiên, DT-01 thì không)
+                if b.get("grip_mm", 0) > bolts[dup].get("grip_mm", 0) + 0.5:
+                    bolts[dup] = b
+                continue
         bolts.append(b)
     secs = dict(lo["sections"])
     secs.update(up["sections"])
@@ -177,6 +182,7 @@ def replace_above(lo_path, up_path, out_path):
     pc = lambda p: np.array(p["origin"]) + np.array(p["a1"]) * np.mean([q[0] for q in p["poly"]]) + \
         np.array(p["a2"]) * np.mean([q[1] for q in p["poly"]])
     plates = [p for p in lo["plates"] if pc(p)[2] <= zc]
+    up_pl = []
     for p in up["plates"]:
         if p.get("ext"):
             continue
@@ -184,21 +190,76 @@ def replace_above(lo_path, up_path, out_path):
         for k in ("origin", "node"):
             p[k] = sh(p[k])
         if pc(p)[2] > zc:
+            up_pl.append(p)
+    plates += up_pl
+    # bản mã đoạn dưới phía trên mặt cắt mà đoạn trên không vẽ (DN-01 vẽ nét đứt bản 219/220 của DN-02 ở cao độ
+    # L70x6 1710 -> không đọc): giữ bản của đoạn dưới (góp ý: thiếu bản mã cả 4 mặt)
+    n_keep = 0
+    for p in lo["plates"]:
+        if pc(p)[2] <= zc or p.get("kind") == "filler":
+            continue
+        if not any(q.get("kind") != "filler" and np.linalg.norm(pc(q) - pc(p)) < 0.12 and
+                   abs(np.dot(q["thick_dir"], p["thick_dir"])) > 0.9 for q in up_pl):
             plates.append(p)
+            n_keep += 1
     bolts = [b for b in lo["bolts"] if b["p"][2] <= zc]
+    kept = [p for p in plates if p in lo["plates"] and pc(p)[2] > zc]
+
+    def on_plate(b, p):
+        o, a1, a2 = (np.array(p[k]) for k in ("origin", "a1", "a2"))
+        q = np.array(b["p"]) - o
+        u, v = q @ a1, q @ a2
+        P = np.array(p["poly"])
+        return abs(np.dot(b["axis"], p["thick_dir"])) > 0.9 and P[:, 0].min() - 0.01 <= u <= P[:, 0].max() + 0.01 \
+            and P[:, 1].min() - 0.01 <= v <= P[:, 1].max() + 0.01 and abs(q @ np.array(p["thick_dir"])) < 0.08
+    lo_kb = [b for b in lo["bolts"] if b["p"][2] > zc and any(on_plate(b, p) for p in kept)]
     for b in up["bolts"]:
         b = dict(b)
         b["p"] = sh(b["p"])
         if b["p"][2] > zc:
+            # cùng lỗ với bu lông đoạn dưới ở bản mã giữ lại: dùng bu lông đoạn dưới (lớp kẹp có bản mã)
+            if any(np.linalg.norm(np.cross(np.array(o["p"]) - np.array(b["p"]), o["axis"])) < 0.015 and
+                   abs(np.dot(o["axis"], b["axis"])) > 0.99 for o in lo_kb):
+                continue
             bolts.append(b)
+    bolts += lo_kb
     secs = dict(lo["sections"])
     secs.update(up["sections"])
+    # thanh đoạn trên áp mặt ngoài thanh cánh ở chỗ có bản mã giữ lại của đoạn dưới (đoạn trên không vẽ bản mã đó):
+    # đẩy đầu thanh ra ngoài đúng chiều dày bản mã; bu lông qua bản mã cộng thêm lớp kẹp
+    import check_dt02 as CK
+    n_push = 0
+    up_ids = {m["id"] for m in members if m.get("segment") == "tren"}
+    for p in kept:
+        pts = CK.plate_points(p)
+        td = np.array(p["thick_dir"]) * p["t_mm"] / 1000
+        for m in members:
+            if m["id"] not in up_ids or m["rule"] != "face":
+                continue
+            if CK.seg_dist(*CK.frame(m)[:2], pc(p), pc(p) + 1e-6) > 0.6:
+                continue
+            if not np.any(CK.where_v(m, secs, pts, 0.001) > 0):
+                continue
+            k = 1 if np.linalg.norm(np.array(m["p1"]) - pc(p)) < np.linalg.norm(np.array(m["p2"]) - pc(p)) else 2
+            old_ = m.get("poff%d" % k, [0, 0, 0])
+            m["poff%d" % k] = (np.array(old_) + td).round(6).tolist()
+            if np.any(CK.where_v(m, secs, pts, 0.001) > 0):
+                m["poff%d" % k] = old_
+            else:
+                n_push += 1
+        for b in bolts:
+            if b in lo_kb or not on_plate(b, p):
+                continue
+            b["grip_mm"] = round(b.get("grip_mm", 0) + p["t_mm"], 1)
+            need = b["grip_mm"] + 0.8 * b["d_mm"] + 7
+            if b.get("L_mm", 0) < need:
+                b["L_mm"] = int(math.ceil(need / 10) * 10)
     zs = [c for m in members for c in (m["p1"][2], m["p2"][2])]
     rep = {"ghep": {"doan_duoi": lo["title"], "doan_tren": up["title"], "cao_do_rap_m": round(dz, 4),
-                    "cat_tai_z_m": round(zc, 4), "cap_bu_long_khop": len(pairs),
+                    "cat_tai_z_m": round(zc, 4), "day_dau_thanh_qua_ban_ma_giu": n_push, "cap_bu_long_khop": len(pairs),
                     "lech_bu_long_chung_mm": round(float(np.abs(pairs).max()) * 1000, 1) if len(pairs) else None,
                     "giu_doan_duoi": {v: sum(1 for m in kept_lo if m["mark"] == v) for v in KEEP_LO_ABOVE.values()},
-                    "bo_trung_doan_tren": n_dup},
+                    "bo_trung_doan_tren": n_dup, "giu_ban_ma_doan_duoi": n_keep},
            "z_range_m": [round(min(zs), 3), round(max(zs), 3)],
            "doan_duoi": lo["report"]["build"], "doan_tren": up["report"]["build"]}
     nm = lambda t: t.split(":")[1].split("(")[0].strip() if t.startswith("Cột") else t.split()[2]

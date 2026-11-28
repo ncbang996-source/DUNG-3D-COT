@@ -94,21 +94,30 @@ def main():
              [f"out/{t}_scene.json", f"out/{t}s_scene.json", f"{B}/combine_faces.py"] + CODE, [f"out/{t}_comb_scene.json"])
         step(f"vach_{t}", [py, f"{B}/dn_plans.py", DXF, sh, f"out/{t}_comb_scene.json", f"out/{t}_full_scene.json"],
              [f"out/{t}_comb_scene.json", f"{B}/dn_plans.py", f"{B}/sheets.py"] + CODE, [f"out/{t}_full_scene.json"])
+    print("2b. Hoàn thiện từng đoạn (thanh vách thò ra ngoài mặt lưng, bu lông cấn thép)")
+    H = f"{B}/hoan_thien.py"
+    for src, dst in (("dt02", "dt02_ht"), ("dt01", "dt01_ht"), ("dn02_full", "dn02_ht"), ("dn01_full", "dn01_ht")):
+        step("ht_" + src, [py, H, f"out/{src}_scene.json", f"out/{dst}_scene.json"],
+             [f"out/{src}_scene.json", H] + CODE, [f"out/{dst}_scene.json"])
     print("3. Ghép các đoạn")
     M = f"{B}/merge_segments.py"
-    step("ghep_dt02_dt01", [py, M, "out/dt02_scene.json", "out/dt01_scene.json", "out/n122_dt02_dt01_scene.json"],
-         ["out/dt02_scene.json", "out/dt01_scene.json", M], ["out/n122_dt02_dt01_scene.json"])
-    step("ghep_dn02", [py, M, "out/n122_dt02_dt01_scene.json", "out/dn02_full_scene.json", "out/n122_3doan_scene.json",
-                       "DT-01"], ["out/n122_dt02_dt01_scene.json", "out/dn02_full_scene.json", M],
+    step("ghep_dt02_dt01", [py, M, "out/dt02_ht_scene.json", "out/dt01_ht_scene.json", "out/n122_dt02_dt01_scene.json"],
+         ["out/dt02_ht_scene.json", "out/dt01_ht_scene.json", M], ["out/n122_dt02_dt01_scene.json"])
+    step("ghep_dn02", [py, M, "out/n122_dt02_dt01_scene.json", "out/dn02_ht_scene.json", "out/n122_3doan_scene.json",
+                       "DT-01"], ["out/n122_dt02_dt01_scene.json", "out/dn02_ht_scene.json", M],
          ["out/n122_3doan_scene.json"])
-    step("ghep_dn01", [py, M, "out/n122_3doan_scene.json", "out/dn01_full_scene.json", "out/n122_4doan_scene.json",
-                       "--replace-above"], ["out/n122_3doan_scene.json", "out/dn01_full_scene.json", M],
-         ["out/n122_4doan_scene.json"])
+    step("ghep_dn01", [py, M, "out/n122_3doan_scene.json", "out/dn01_ht_scene.json", "out/n122_4doan_raw_scene.json",
+                       "--replace-above"], ["out/n122_3doan_scene.json", "out/dn01_ht_scene.json", M],
+         ["out/n122_4doan_raw_scene.json"])
+    step("ht_cot", [py, H, "out/n122_4doan_raw_scene.json", "out/n122_4doan_scene.json", "--ghep"],
+         ["out/n122_4doan_raw_scene.json", H] + CODE, ["out/n122_4doan_scene.json"])
     print("3b. Xà X2 (3 cao độ) ghép vào cột")
-    step("xa_X2", [py, f"{B}/xa.py", DXF, "out/n122_4doan_scene.json", "out/n122_xa_scene.json"],
-         ["out/n122_4doan_scene.json", f"{B}/xa.py", DXF] + CODE, ["out/n122_xa_scene.json"])
+    step("xa_X2", [py, f"{B}/xa.py", DXF, "out/n122_4doan_scene.json", "out/n122_xa_raw_scene.json"],
+         ["out/n122_4doan_scene.json", f"{B}/xa.py", DXF] + CODE, ["out/n122_xa_raw_scene.json"])
+    step("ht_xa", [py, H, "out/n122_xa_raw_scene.json", "out/n122_xa_scene.json", "--ghep"],
+         ["out/n122_xa_raw_scene.json", H] + CODE, ["out/n122_xa_scene.json"])
     print("4. Kiểm chạm (cột đủ + DN-02 đủ - phần đỉnh DN-02 được thay trong cột đủ)")
-    checks = [("dt02", "out/dt02_scene.json"), ("dt01", "out/dt01_scene.json"), ("dn02", "out/dn02_full_scene.json"),
+    checks = [("dt02", "out/dt02_ht_scene.json"), ("dt01", "out/dt01_ht_scene.json"), ("dn02", "out/dn02_ht_scene.json"),
               ("cot", "out/n122_4doan_scene.json"), ("cot_xa", "out/n122_xa_scene.json")]
 
     def chk(c):
@@ -118,13 +127,13 @@ def main():
     bad = False
     for n, _ in checks:
         lines = (OUT / f"log_kiem_{n}.txt").read_text().splitlines()
-        summ = [x for x in lines if x.startswith(("bu lông xuyên", "cặp chạm", "bản mã chạm"))]
+        summ = [x for x in lines if x.startswith(("bu lông xuyên", "cặp chạm", "bản mã chạm", "bu lông cấn"))]
         print(f"   {n}: " + " | ".join(summ))
         bad |= any(not x.endswith(": 0") for x in summ)
     print("5. Chép dữ liệu + đóng gói HTML")
-    pairs = [("out/dt02_scene.json", "data/n122/dt02_scene.json", "dist/N122_DT-02.html"),
-             ("out/dt01_scene.json", "data/n122/dt01_scene.json", "dist/N122_DT-01.html"),
-             ("out/dn02_full_scene.json", "data/n122/dn02_scene.json", "dist/N122_DN-02.html"),
+    pairs = [("out/dt02_ht_scene.json", "data/n122/dt02_scene.json", "dist/N122_DT-02.html"),
+             ("out/dt01_ht_scene.json", "data/n122/dt01_scene.json", "dist/N122_DT-01.html"),
+             ("out/dn02_ht_scene.json", "data/n122/dn02_scene.json", "dist/N122_DN-02.html"),
              ("out/n122_dt02_dt01_scene.json", "data/n122/dt02_dt01_scene.json", "dist/N122_DT-02+DT-01.html"),
              ("out/n122_3doan_scene.json", "data/n122/dt02_dt01_dn02_scene.json", "dist/N122_DT-02+DT-01+DN-02.html"),
              ("out/n122_4doan_scene.json", "data/n122/n122_scene.json", "dist/N122_cot_DT-02+DT-01+DN-02+DN-01.html"),

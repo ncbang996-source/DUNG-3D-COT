@@ -266,3 +266,87 @@ def corner_fix(members, LIB, rep):
             rep["clash_fix"].append({"loai": "vát góc mép cánh còn lại đầu thanh tại góc cột (đề xuất)",
                                      "section": a_["section"] + "/" + b_["section"],
                                      "mm": f"{best[1]}x{best[2]}" if best else "không gỡ được"})
+
+
+# ---------------------------------------------------------------- vát TAM GIÁC giữ khoảng cách bu lông tới mép
+# Góp ý người dùng (gop_y 20261127_1721): chỉ vát tam giác ở góc mép cánh (không vát vuông / chữ nhật / cắt lùi cả cánh),
+# vát vừa đủ, bu lông phải còn đủ khoảng cách tới mép cắt; có thể vát cánh thanh kia thay vì cắt nhiều thanh này.
+EDGE = {16: 21.0, 20: 29.0, 24: 32.0}         # tim bu lông tới mép thanh giằng, min (ghi chú chung bản vẽ)
+
+
+def local(m, Q):
+    """Toạ độ địa phương của điểm Q (n,3) trên thanh: x dọc thanh từ p1 (mm), a ngang cánh liên kết từ lưng, c ngang
+    cánh còn lại từ lưng (mm)."""
+    P1, P2, e1, e2 = CK.frame(m)
+    L = float(np.linalg.norm(P2 - P1))
+    sol = np.linalg.solve(np.c_[P2 - P1, e1, e2], (np.atleast_2d(Q) - P1).T)
+    return np.c_[sol[0] * L * 1000, sol[1] * 1000 + m["g"][0], sol[2] * 1000 + m["g"][1]], L * 1000
+
+
+def bolt_spots(m, S, bolts):
+    """Bu lông xuyên qua thanh m: [(x mm dọc thanh, w mm ngang cánh từ lưng, cánh 'conn'/'out', d)]."""
+    out = []
+    P1, P2 = CK.frame(m)[:2]
+    for b in bolts:
+        p = np.array(b["p"])
+        ab = P2 - P1
+        t = np.clip((p - P1) @ ab / (ab @ ab), 0, 1)
+        if np.linalg.norm(p - (P1 + ab * t)) > 0.25:
+            continue
+        ax = np.array(b["axis"])
+        Q = p + np.outer(np.linspace(0.0, (b.get("grip_mm") or 20) / 1000, 7), ax)
+        w = CK.where_v(m, S, Q, -0.001)
+        if not np.any(w > 0):
+            continue
+        fl = 1 if np.sum(w == 1) >= np.sum(w == 2) else 2
+        lc, L = local(m, Q[w == fl].mean(0))
+        x, a, c = lc[0]
+        out.append((x, a if fl == 1 else c, "conn" if fl == 1 else "out", b.get("d_mm", 16)))
+    return out
+
+
+def tri_ok(m, key, cut, spots, S):
+    """Vát tam giác (cut = {flange, a, b}) ở đầu key có giữ đủ khoảng cách mọi bu lông tới mép cắt không."""
+    bw = S[m["section"]]["b"]
+    L = float(np.linalg.norm(np.array(CK.frame(m)[1]) - np.array(CK.frame(m)[0]))) * 1000
+    A, B = cut["a"], cut["b"]
+    for x, w, fl, d in spots:
+        if fl != cut["flange"]:
+            continue
+        x0 = x if key.startswith("cut1") else L - x
+        if x0 >= B + EDGE.get(d, 21):
+            continue
+        # đường cắt: từ (x0 = 0, w = bw - A) tới (x0 = B, w = bw)
+        if x0 < B and w > bw - A * (1 - x0 / B):
+            return False
+        dist = abs(x0 * A - (w - (bw - A)) * B) / math.hypot(A, B)
+        # không làm khoảng cách tới mép kém hơn hiện trạng (VD đường đinh 35 trên L60: mép còn 25 < 29 của M20)
+        if dist < min(EDGE.get(d, 21), bw - w):
+            return False
+    return True
+
+
+def tri_search(cands, S, amax_frac=0.5, bmax=200, flanges=("out", "conn")):
+    """cands: [(thanh, key, spots, touching)] - touching(): còn chạm không (sau khi đặt vát thử lên thanh đó). Thử vát tam giác (cánh còn lại / cánh liên kết, a <= amax_frac*b cánh, bội 5 mm)
+    trên từng thanh ứng viên, chọn diện tích cắt nhỏ nhất làm touching() = False. Trả (diện tích, thanh, key, cut) hoặc
+    None. Thanh đã có vát ở đầu đó thì bỏ qua (không chồng 2 vát)."""
+    best = None
+    for m, key, spots, touching in cands:
+        if m.get(key):
+            continue
+        bw = S[m["section"]]["b"]
+        for fl in flanges:
+            amax = int(bw * amax_frac) if fl != "heel" else int(m["g"][0]) - 10
+            for A in range(5, amax + 1, 5):
+                cand = [B for B in range(5, bmax + 1, 5) if not (best and A * B / 2 >= best[0])
+                        and tri_ok(m, key, {"flange": fl, "a": A, "b": B}, spots, S)]
+
+                def ok(B, A=A, fl=fl, m=m, key=key, touching=touching):
+                    m[key] = {"flange": fl, "a": A, "b": B}
+                    r = not touching()
+                    m.pop(key, None)
+                    return r
+                B = first_ok(cand, ok)
+                if B is not None:
+                    best = (A * B / 2, m, key, {"flange": fl, "a": A, "b": B})
+    return best

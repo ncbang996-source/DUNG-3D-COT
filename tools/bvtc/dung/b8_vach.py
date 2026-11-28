@@ -40,6 +40,10 @@ def run(V):  # noqa: C901
             fm += [m for m in pm if (m["ang"] < 2 or m["ang"] > 178) and abs((m["c1"][1] + m["c2"][1]) / 2 - cyp) < 0.2
                    and m.get("heel_to_center")]
             g_plan = fm[0]["heel_to_center"] if fm else (mh["heel_to_center"] or sec(mh["section"])["b"] / 2)
+            if pname in ST.CFG.get("plan_gauge_center", []):
+                # góp ý 20261127_1721: trục bu lông vách ở GIỮA cánh nằm thanh mặt cột (đường đinh vẽ sát lưng làm
+                # thanh vách cấn cánh đứng thanh mặt cột)
+                g_plan = sec(mh["section"])["b"] / 2
             plan_off = dback - g_plan
             plan_rep_g = {"g_plan_mm": g_plan, "dback_mm": round(dback, 1)}
         else:
