@@ -74,7 +74,7 @@ def restack(b, s, S):
     runs.sort()
     groups = [[runs[0]]]
     for r_ in runs[1:]:
-        if r_[0] - max(x[1] for x in groups[-1]) <= 0.010:   # khe <= 10 mm (lệch giữa 2 đoạn ghép): bu lông qua đủ lớp
+        if r_[0] - max(x[1] for x in groups[-1]) <= (0.025 if b.get("no_filler") else 0.010):   # khe <= 10 mm (lệch giữa 2 đoạn ghép): bu lông qua đủ lớp
             groups[-1].append(r_)
         else:
             groups.append([r_])
@@ -83,7 +83,9 @@ def restack(b, s, S):
     s0, s1 = g[0][0], max(x[1] for x in g)
     gaps, e = [], g[0][1]
     for r_ in g[1:]:
-        if r_[0] > e + 0.0012:
+        if r_[0] > e + 0.0012 and b.get("no_filler"):
+            gaps.append(round((r_[0] - e) * 1000, 1))      # người dùng: không đặt vòng đệm (VD mặt cắt 2-2 xà X1)
+        elif r_[0] > e + 0.0012:
             gaps.append(round((r_[0] - e) * 1000, 1))
             # tấm đệm dày vừa khe (quy tắc đã chốt), vuông 44 x 44 quanh bu lông
             c = mid + ax * e

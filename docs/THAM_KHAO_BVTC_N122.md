@@ -310,3 +310,8 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
 - ĐỂ LỆCH (người dùng: để xem thực tế): 2 biên dưới / 2 thanh đứng nằm trên 2 mặt xoay ngược nhau -> cánh tựa của thanh
   2-2 lệch 8,6 độ mỗi đầu (gập 8,3, xoắn 2-3), thanh chéo 5-5 lệch 18 độ mỗi đầu. Thanh 2-2 nâng theo pháp tuyến mặt 2-2
   cho khỏi lấn biên; vòng đệm / tấm đệm lún vài mm ở 1 mép (kiểm còn báo ~26 bu lông, ~18 tấm) - chờ người dùng quyết.
+- Người dùng chốt (28/11): 2-2 giữ nguyên, BỎ vòng đệm (bu lông 2-2 `no_filler`, qua khe tới 25 mm, ghi `khe_lop_mm`).
+  5-5: BẺ CỤC BỘ cánh còn lại 2 thanh đứng X1 18,1 độ tại bu lông thanh chéo (`bends`, vùng b/sin + 10, ramp 40) cho
+  nằm trong mặt phẳng x = lưng thanh đứng; thanh chéo L50x4 áp phẳng mặt đó, bu lông dọc x. Chỉ 2 bu lông trên thanh
+  chéo lấy từ hình 5-5 (2 bu lông kia = thanh đứng - biên, đã có ở mặt đứng). Còn lại: đầu/đai ốc tì mặt nghiêng tại
+  biên dưới (lệch 8,9 độ) ~19 bu lông, 2 chỗ bản 117/117a - L60x5 mặt bằng 1-1.

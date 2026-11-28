@@ -532,7 +532,8 @@ def build_x1(doc, msp, cfg, z_top):
         elif abs(q[1] - yb) * SC < 60:
             ax_ = in_side * MYv
         bolts3.append((pq - ax_ * 0.02, ax_, d, Lc(l22, q, d), "mat_cat_2_2", None))
-    # ---------- 5-5: thanh chéo L50x4 giữa 2 thanh đứng (2 mặt cánh còn lại thanh đứng)
+    # ---------- 5-5: thanh chéo L50x4 giữa 2 thanh đứng. Người dùng: bẻ cục bộ cánh còn lại thanh đứng (18,1°) cho
+    # nằm trong mặt phẳng ngang x = lưng thanh đứng; thanh chéo áp phẳng trên mặt đó (mặt phẳng x = const)
     mv = next(m for m in out if m["mark"] == "X1_dung")
     P1v, P2v, e1v, e2v = CK.frame(mv)
     gv = mv["g"][0] / 1000
@@ -543,34 +544,41 @@ def build_x1(doc, msp, cfg, z_top):
     half5 = abs(vv[0]["c1"][0] - xc5)
     ylo5 = min(vv[0]["c1"][1], vv[0]["c2"][1])
     zlo = min(P1v[2], P2v[2])
-    Hv = (P1v if P1v[2] < P2v[2] else P2v) - e1v * gv                       # lưng cánh còn lại thanh đứng (mặt trước)
-    yb5 = abs((Hv + e2v * T.sec(mv["section"])["b"] / 2000)[1])
+    Hv = (P1v if P1v[2] < P2v[2] else P2v) - e1v * gv                       # lưng thanh đứng (mặt trước)
+    hx = Hv[0]
+    sx = -np.sign(hx)                                                       # hướng vào trong xà theo x
+    yb5 = abs(Hv[1]) - gv                                                   # đường đinh cánh bẻ (cánh chĩa vào trong)
 
-    def P55(x, y, face_off):
-        f = (x - xc5) / half5
-        base = Hv + e1v * face_off
-        Pf = np.array([base[0], -yb5, zlo + (y - ylo5) * SC / 1000])
-        return Pf if f <= 0 else Pf * MYv
+    def P55(x, y, xoff):
+        return np.array([hx + sx * xoff, (x - xc5) / half5 * yb5, zlo + (y - ylo5) * SC / 1000])
+    bend55 = []
     for m in a55:
         if abs(m["ang"] - 90) < 2:
             continue
         up = m["vis"] == "S"
         off = 0.0 if up else tv
-        b1, b2, _ = ends_by_bolts(m, b55)
+        b1, b2, on55 = ends_by_bolts(m, b55)
         p1 = P55(*b1, off)
         p2 = P55(*b2, off)
-        p1[1] = (b1[0] - xc5) / half5 * yb5
-        p2[1] = (b2[0] - xc5) / half5 * yb5
+        dd_ = (np.array(b2) - b1) / np.linalg.norm(np.array(b2) - b1)
+        diag_b55 = [(q, d) for q, d in b55 if abs(dd_[0] * (q[1] - b1[1]) - dd_[1] * (q[0] - b1[0])) * SC < 8]
+        u_ = unitv(p2 - p1)
         hd = np.array(m["heel_dir"])
-        e1 = unitv([0.0, -hd[0], -hd[1]])
-        e1 = unitv(e1 - np.dot(e1, e1v) * e1v)
-        e2 = -e1v if up else e1v
+        e1 = np.array([0.0, -hd[0], -hd[1]])
+        e1 = unitv(e1 - np.dot(e1, u_) * u_)
+        e2 = np.array([-sx if up else sx, 0.0, 0.0])
         out.append(member(p1, p2, m["section"], e1, e2, gauge(m), "NGOAI" if up else "TRONG", "mat_cat_5_5",
                           {"xa_bo": "X1"}))
-    for q, d in b55:
+        sphi = max(float(np.linalg.norm(np.cross(u_, [0, 0, 1.0]))), 0.2)
+        cphi = abs(u_[2])
+        half = 0.5 * (T.sec(m["section"])["b"] / sphi + T.sec(mv["section"])["b"] * cphi / sphi) + 10
+        for P in (p1, p2):
+            bend55.append({"z": float(P[2]), "front": bool(P[1] < 0), "half_mm": round(half, 1)})
+    # chỉ bu lông trên thanh chéo; 2 bu lông còn lại của hình 5-5 = bu lông thanh đứng - biên (đã có ở mặt đứng)
+    for q, d in diag_b55:
         pq = P55(*q, 0.0)
-        pq[1] = (q[0] - xc5) / half5 * yb5
-        bolts3.append((pq - e1v * 0.02, e1v, d, Lc(l55, q, d), "mat_cat_5_5", None))
+        ax_ = np.array([sx, 0.0, 0.0])
+        bolts3.append((pq - ax_ * 0.02, ax_, d, Lc(l55, q, d), "mat_cat_5_5", None))
     # ---------- bản mã: X113 (đầu xà, mặt bên, d8 ngoài biên) - X114 (đầu xà, nằm ngang d12, dưới cánh nằm biên trên)
     plates = []
     banma = T.banma_loops(msp)
@@ -607,6 +615,7 @@ def build_x1(doc, msp, cfg, z_top):
     put("X114", cfg["p11"], b11, lambda x, y: P11(x, y, z_up), np.array([1.0, 0, 0]), np.array([0, 1.0, 0]),
         np.array([0, 0, 1.0]), 12)
     rep["thanh"] = len(out)
+    rep["bend55"] = bend55
     return out, plates, bolts3, rep
 
 
@@ -729,6 +738,25 @@ def main(dxf, scene_in, scene_out):
                 new_m.append(mm)
             new_p.extend(mir_p(p, M) for p in arm1_p)
             new_b.extend((b[0] * M, b[1] * M, b[2], b[3], b[4], b[5]) for b in arm1_b)
+        bend55 = r1.pop("bend55", [])
+        rep["X1_be_canh_5_5"] = []
+        for mm in new_m:
+            if mm.get("mark") != "X1_dung":
+                continue
+            P1v, P2v, e1v, e2v = CK.frame(mm)
+            Lv = float(np.linalg.norm(P2v - P1v))
+            u_ = (P2v - P1v) / Lv
+            tgt = np.array([0.0, np.sign(e2v[1]), 0.0])          # cánh còn lại xoay về mặt phẳng x = const
+            th = math.atan2(float(np.dot(np.cross(e2v, tgt), u_)), float(np.dot(e2v, tgt)))
+            for bz in bend55:
+                if bz["front"] != bool(P1v[1] < 0):
+                    continue
+                xb = (bz["z"] - P1v[2]) / u_[2] * 1000
+                x0, x1 = max(0.0, xb - bz["half_mm"]), min(Lv * 1000, xb + bz["half_mm"])
+                mm.setdefault("bends", []).append({"x0": round(x0, 1), "x1": round(x1, 1), "ramp": 40.0,
+                                                   "theta_deg": round(math.degrees(th), 3), "plan": "5-5 X1"})
+                rep["X1_be_canh_5_5"].append({"thanh": mm["id"], "x0": round(x0), "x1": round(x1),
+                                              "deg": round(math.degrees(th), 2)})
         rep["X1"] = dict(r1, cao_do_m=round(z_top, 3))
     # đầu dưới X205 áp mặt ngoài bản mã có tai của thân: chiều dày thật từng cao độ (DN-01: 123 d8; DN-02: 226 d10)
     face_pl = [p for p in sc["plates"] if abs(p["thick_dir"][1]) > 0.9 and p.get("kind") != "filler"]
@@ -850,7 +878,7 @@ def main(dxf, scene_in, scene_out):
         groups = [[runs[0]]]
         for r in runs[1:]:
             gap = r[0] - max(x[1] for x in groups[-1])
-            if gap <= 0.0008 or gap <= (0.04 if fl else 0.012):
+            if gap <= 0.0008 or gap <= (0.04 if fl else 0.025 if view == "mat_cat_2_2" else 0.012):
                 groups[-1].append(r)
             else:
                 groups.append([r])
@@ -885,6 +913,8 @@ def main(dxf, scene_in, scene_out):
                 if a_ > e + 0.0008:
                     gaps.append((e, a_))
                 e = max(e, b_)
+            if view == "mat_cat_2_2":
+                gaps = []                 # người dùng: mặt cắt 2-2 bỏ vòng đệm (bu lông qua khe)
             for a_, b_ in gaps:
                 gp = (b_ - a_) * 1000
                 n, t = fl if fl else (1, gp)
@@ -919,6 +949,8 @@ def main(dxf, scene_in, scene_out):
         bolts_out.append({"id": 0, "p": np.round(head, 5).tolist(), "axis": np.round(ax, 6).tolist(),
                           "nut": np.round(ax, 6).tolist(), "d_mm": d, "grip_mm": round(grip, 1), "L_mm": L,
                           "L_from": "ký hiệu bản vẽ" if Ls else "tính", "t_mm": 8, "kind": "xa", "lop": names})
+        if view == "mat_cat_2_2":
+            bolts_out[-1]["no_filler"] = True
     sc["members"] = allm
     sc["plates"] = allp + [p for p in new_p if p["kind"] == "filler"]
     sc["bolts"] = col_b + bolts_out
