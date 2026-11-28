@@ -63,7 +63,7 @@ def bolt_issues(s, S):
     A1 = np.array([m["p1"] for m in ms], float)
     A2 = np.array([m["p2"] for m in ms], float)
     for i, b in enumerate(s["bolts"]):
-        if b["kind"] in ("neo",):
+        if b["kind"] in ("neo",) or b.get("neo"):
             continue
         p = np.array(b["p"])
         ax = np.array(b["nut"])
@@ -100,7 +100,7 @@ def bolt_edges(s, S):
     """Mỗi bu lông: cánh thép nó xuyên (vuông góc), khoảng cách tới mép cánh / đầu thanh."""
     rep = []
     for i, b in enumerate(s["bolts"]):
-        if b["kind"] == "neo":
+        if b["kind"] == "neo" or b.get("neo"):
             continue
         p = np.array(b["p"])
         ax = np.array(b["nut"])

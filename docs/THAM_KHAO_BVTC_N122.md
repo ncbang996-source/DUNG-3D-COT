@@ -328,3 +328,4 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
 - Biên X1 (xa.py build_x1): đầu phía đầu xà kéo tới nét đầu thanh vẽ rõ trên mặt đứng (biên trên thò ra ngoài bản
   X113 20 mm, kéo thêm 110 mm so với trước - góp ý 28/11 21:10).
 - App: nút "Xóa hết" góp ý; "Tải file góp ý" cho lưu file rỗng (sau khi xóa các ý đã sửa).
+- Bản đế: bỏ bu lông neo, chỉ chừa 16 lỗ Ø64 xuyên bản đế d40 (bolt `kind: "lo"`, `neo: true`, `hole_mm: 64`).

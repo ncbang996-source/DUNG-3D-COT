@@ -454,10 +454,12 @@ def run(V):  # noqa: C901
                            "reason": f"bản đế 450x450x40 (chi tiết {ST.SHEET})"})
             for du in (0.1, 0.35):
                 for dv in (0.1, 0.35):
-                    p = Rk @ (corner + du * ex_ + dv * ey_)
+                    p = Rk @ (corner + du * ex_ + dv * ey_ - np.array([0, 0, 0.04]))
+                    # người dùng (28/11): không thể hiện bu lông neo, chỉ chừa lỗ Ø64 xuyên bản đế d40
                     bolts.append({"id": 0, "p": p.round(5).tolist(), "axis": [0, 0, 1.0], "nut": [0, 0, 1.0],
-                                  "d_mm": 56, "t_mm": 40, "kind": "neo"})
-        rep["base"] = "4 bản đế 450x450x40, 12 sườn d12 (đúng hình chi tiết), 16 bu lông neo Ø56"
+                                  "d_mm": 56, "hole_mm": 64, "grip_mm": 40, "t_mm": 40, "kind": "lo", "neo": True,
+                                  "note": "lỗ bu lông neo M56 (Ø64) - chỉ thể hiện lỗ"})
+        rep["base"] = "4 bản đế 450x450x40, 12 sườn d12 (đúng hình chi tiết), 16 lỗ neo Ø64 (không thể hiện bu lông neo)"
         rep["base_heel_mm"] = float(HEEL)
     else:
         rep["base"] = "không có chân cột: đoạn đặt trên %s (người dùng chốt bỏ bản đế)" % (ONTOP or ST.CFG.get("bottom_stub") or {"sheet": "?"})["sheet"]

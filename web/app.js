@@ -348,7 +348,7 @@ function buildBolts() {
     q.setFromUnitVectors(Y, nd);
     holes.setMatrixAt(i, Z0);
     if (b.kind === 'lo') {
-      const g = (b.grip_mm || 10) / 1000, dh = d + 0.002;
+      const g = (b.grip_mm || 10) / 1000, dh = b.hole_mm ? b.hole_mm / 1000 : d + 0.002;
       M.compose(c.clone().addScaledVector(nd, g / 2), q, new THREE.Vector3(dh, g + 0.002, dh)); holes.setMatrixAt(i, M);
       shafts.setMatrixAt(i, Z0); heads.setMatrixAt(i, Z0); nuts.setMatrixAt(i, Z0);
       return;
@@ -471,7 +471,7 @@ function showBolt(i) {
   $('iId').textContent = '';
   $('info').querySelector('h2').firstChild.textContent = 'Bu lông ';
   const rows = [
-    ['Đường kính', 'M' + b.d_mm],
+    ['Đường kính', b.kind === 'lo' ? 'Lỗ Ø' + (b.hole_mm || b.d_mm + 2) + (b.note ? ' - ' + b.note : '') : 'M' + b.d_mm],
     ['Chiều dài', b.L_mm != null ? b.L_mm + ' mm' : '—'],
     ['Nguồn chiều dài', b.L_from || '—'],
     ['Chiều dày kẹp', b.grip_mm != null ? b.grip_mm + ' mm' : '—'],
@@ -599,7 +599,8 @@ function fbTarget(hit) {
   if (o.userData.bolts && hit.instanceId !== undefined) {
     const b = DATA.bolts[hit.instanceId];
     return { kind: 'bu lông', index: hit.instanceId, d_mm: b.d_mm, L_mm: b.L_mm, grip_mm: b.grip_mm, loai: b.kind,
-             text: `Bu lông M${b.d_mm}${b.L_mm ? ' L' + b.L_mm : ''} (${b.kind || ''})` };
+             text: b.kind === 'lo' ? `Lỗ Ø${b.hole_mm || b.d_mm + 2}${b.note ? ' (' + b.note + ')' : ''}`
+               : `Bu lông M${b.d_mm}${b.L_mm ? ' L' + b.L_mm : ''} (${b.kind || ''})` };
   }
   if (o.userData.plate !== undefined) {
     const pl = DATA.plates[o.userData.plate];
@@ -856,7 +857,7 @@ function platesStats() {
   const byT = {};
   for (const p of P) { const key = (p.kind === 'filler' ? 'Tấm đệm ' : 'Bản mã ') + p.t_mm; const s = (byT[key] ??= { n: 0, a: 0, m: 0 }); s.n++; s.a += p.area_m2; s.m += p.mass_kg; }
   const byD = {};
-  for (const b of B) { const k = (b.kind === 'lo' ? 'Lỗ Ø' : 'M') + b.d_mm; byD[k] = (byD[k] || 0) + 1; }
+  for (const b of B) { const k = b.kind === 'lo' ? 'Lỗ Ø' + (b.hole_mm || b.d_mm + 2) : 'M' + b.d_mm; byD[k] = (byD[k] || 0) + 1; }
   const pm = P.reduce((a, p) => a + p.mass_kg, 0);
   return `<h3>Bản mã (A × t × 7850)</h3><table><tr><th>Loại, dày (mm)</th><th>Số bản</th><th>Diện tích (m²)</th><th>Khối lượng (kg)</th></tr>` +
     Object.entries(byT).sort((a, b) => a[0].localeCompare(b[0], 'vi', { numeric: true })).map(([t, s]) => `<tr><td>${t}</td><td>${s.n}</td><td>${fmt(s.a, 3)}</td><td>${fmt(s.m, 1)}</td></tr>`).join('') +
