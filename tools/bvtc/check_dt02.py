@@ -407,6 +407,8 @@ if __name__ == "__main__" and len(sys.argv) > 2 and sys.argv[2] == "plates":
 def bolt_body_points(b, shank=False):
     """Điểm mẫu phần đầu bu lông (+ vòng đệm) và đai ốc (+ vòng đệm, đuôi ren) - phần nằm NGOÀI các lớp thép kẹp.
     Bán kính 0,9 d (lục giác / vòng đệm), đầu cao 0,7 d + 3, đai ốc 0,8 d + 3 + đuôi ren."""
+    if b.get("kind") == "lo":
+        return np.zeros((0, 3))                       # chỉ là lỗ (không bu lông)
     d = b.get("d_mm", 16) / 1000
     p = np.array(b["p"], float)
     ax = np.array(b.get("nut") or b["axis"], float)
@@ -435,7 +437,7 @@ def bolt_steel(s, S):
     A1 = np.array([frame(m)[0] for m in ms])
     A2 = np.array([frame(m)[1] for m in ms])
     for i, b in enumerate(s["bolts"]):
-        if b["kind"] in ("neo",):
+        if b.get("kind") in ("neo", "lo"):
             continue
         Q = bolt_body_points(b)
         c = Q.mean(0)

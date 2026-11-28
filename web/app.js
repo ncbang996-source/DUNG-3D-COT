@@ -338,11 +338,21 @@ function buildBolts() {
   const shafts = new THREE.InstancedMesh(shaftGeo, boltMat, bolts.length);
   const heads = new THREE.InstancedMesh(nutGeo, boltMat, bolts.length);
   const nuts = new THREE.InstancedMesh(nutGeo, nutMat, bolts.length);
+  // lỗ (kind 'lo': lỗ 1 lớp thép, không bu lông - chỉ thể hiện lỗ): ống tối đường kính d + 2 mm xuyên qua lớp thép
+  const holes = new THREE.InstancedMesh(shaftGeo, new THREE.MeshBasicMaterial({ color: 0x111111 }), bolts.length);
+  const Z0 = new THREE.Matrix4().makeScale(0, 0, 0);
   const Y = new THREE.Vector3(0, 1, 0), M = new THREE.Matrix4(), q = new THREE.Quaternion();
   bolts.forEach((b, i) => {
     const d = b.d_mm / 1000, nd = new THREE.Vector3(...(b.nut || b.axis));
     const c = new THREE.Vector3(...b.p);
     q.setFromUnitVectors(Y, nd);
+    holes.setMatrixAt(i, Z0);
+    if (b.kind === 'lo') {
+      const g = (b.grip_mm || 10) / 1000, dh = d + 0.002;
+      M.compose(c.clone().addScaledVector(nd, g / 2), q, new THREE.Vector3(dh, g + 0.002, dh)); holes.setMatrixAt(i, M);
+      shafts.setMatrixAt(i, Z0); heads.setMatrixAt(i, Z0); nuts.setMatrixAt(i, Z0);
+      return;
+    }
     if (b.grip_mm != null && b.L_mm != null) {
       // p = mặt tựa đầu bu lông; thân dài L theo ký hiệu bản vẽ xuyên qua các lớp thép (kẹp = grip)
       const L = b.L_mm / 1000, grip = b.grip_mm / 1000;
@@ -357,8 +367,8 @@ function buildBolts() {
     M.compose(c.clone().addScaledVector(nd, -(grip / 2 + 0.35 * d)), q, new THREE.Vector3(1.7 * d, 0.65 * d, 1.7 * d)); heads.setMatrixAt(i, M);
     M.compose(c.clone().addScaledVector(nd, grip / 2 + 0.4 * d), q, new THREE.Vector3(1.8 * d, 0.8 * d, 1.8 * d)); nuts.setMatrixAt(i, M);
   });
-  for (const im of [shafts, heads, nuts]) im.userData.bolts = true;
-  boltGroup.add(shafts, heads, nuts);
+  for (const im of [shafts, heads, nuts, holes]) im.userData.bolts = true;
+  boltGroup.add(shafts, heads, nuts, holes);
 }
 
 // ---------------------------------------------------------------- labels
@@ -840,12 +850,12 @@ function platesStats() {
   const byT = {};
   for (const p of P) { const key = (p.kind === 'filler' ? 'Tấm đệm ' : 'Bản mã ') + p.t_mm; const s = (byT[key] ??= { n: 0, a: 0, m: 0 }); s.n++; s.a += p.area_m2; s.m += p.mass_kg; }
   const byD = {};
-  for (const b of B) byD['M' + b.d_mm] = (byD['M' + b.d_mm] || 0) + 1;
+  for (const b of B) { const k = (b.kind === 'lo' ? 'Lỗ Ø' : 'M') + b.d_mm; byD[k] = (byD[k] || 0) + 1; }
   const pm = P.reduce((a, p) => a + p.mass_kg, 0);
   return `<h3>Bản mã (A × t × 7850)</h3><table><tr><th>Loại, dày (mm)</th><th>Số bản</th><th>Diện tích (m²)</th><th>Khối lượng (kg)</th></tr>` +
     Object.entries(byT).sort((a, b) => a[0].localeCompare(b[0], 'vi', { numeric: true })).map(([t, s]) => `<tr><td>${t}</td><td>${s.n}</td><td>${fmt(s.a, 3)}</td><td>${fmt(s.m, 1)}</td></tr>`).join('') +
     `<tr><th>Tổng</th><th>${P.length}</th><th></th><th>${fmt(pm, 1)}</th></tr></table>` +
-    `<h3>Bu lông (không tính mối nối thanh cánh)</h3><p>${Object.entries(byD).map(([k, n]) => `${k}: ${n} con`).join(' · ')}</p>` +
+    `<h3>Bu lông (không tính mối nối thanh cánh)</h3><p>${Object.entries(byD).map(([k, n]) => `${k}: ${n} ${k.startsWith('Lỗ') ? 'lỗ' : 'con'}`).join(' · ')}</p>` +
     `<p class="muted">Bản mã: nút thanh cánh có ≥ 2 thanh cùng mặt tiếp xúc, hoặc thanh > 2 bu lông. Nút giao chữ X: 1 bu lông + tấm đệm 45×45. Bản mã tính theo hướng cánh tự động; đổi hướng trong app không tính lại bản mã.</p>`;
 }
 $('btnStats').addEventListener('click', () => {

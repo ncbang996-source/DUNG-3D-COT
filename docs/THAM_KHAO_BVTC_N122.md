@@ -315,3 +315,14 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
   nằm trong mặt phẳng x = lưng thanh đứng; thanh chéo L50x4 áp phẳng mặt đó, bu lông dọc x. Chỉ 2 bu lông trên thanh
   chéo lấy từ hình 5-5 (2 bu lông kia = thanh đứng - biên, đã có ở mặt đứng). Còn lại: đầu/đai ốc tì mặt nghiêng tại
   biên dưới (lệch 8,9 độ) ~19 bu lông, 2 chỗ bản 117/117a - L60x5 mặt bằng 1-1.
+
+## Góp ý 28/11 (gop_y_DT-02_20261128_2037.json) - người dùng chốt
+- Lỗ chỉ qua 1 lớp thép (trước là bu lông treo M20/M16): CHỈ THỂ HIỆN LỖ (bolt `kind: "lo"`, app vẽ lỗ đen Ø d+2,
+  không tính bu lông; thống kê ghi "Lỗ Ø..").
+- X114: bỏ cụm 4 lỗ M16 giữa bản (hình 1-1 / chi tiết có vẽ nhưng người dùng xác nhận không có).
+- 2-2 X1: thanh ngang L50x4 phía cột (sát thanh đứng) dời 50 mm DỌC BIÊN về phía đầu xà (mỗi đầu trượt theo biên
+  của nó). Thanh chéo L60x5 úp xuống MẶT DƯỚI cánh biên dưới (cánh còn lại chĩa xuống); đầu phía cột vát góc lưng
+  5x15 / 5x20 tránh tai bản mã 119/119a (CẦN XEM).
+- Bu lông vẽ trên mặt đứng nằm trong bản mã có chi tiết nhưng không có lỗ chi tiết nào trong 15 mm (lỗ chi tiết lệch
+  mặt đứng > ngưỡng) -> giữ bu lông vẽ (b5_bu_long). Trước bị mất: đầu thanh xiên DN-02 (bản 222/225/227), DN-01.
+

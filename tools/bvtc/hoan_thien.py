@@ -216,6 +216,16 @@ def plate_fix(s, S, rep):
         def touching(m=m, pts=pts):
             return bool(np.any(CK.where_v(m, S, pts, 0.001) > 0))
         best = F.tri_search([(m, k2, F.bolt_spots(m, S, s["bolts"]), touching)], S, amax_frac=0.6, flanges=fls)
+        if not best and k2 == key:
+            # không vát tam giác được (VD đầu thanh úp dưới biên xà X1 đâm vào tai bản mã bẻ): vát góc lưng (cánh còn
+            # lại lùi b) - CẦN XEM
+            best = F.tri_search([(m, k2, F.bolt_spots(m, S, s["bolts"]), touching)], S, flanges=("heel",), bmax=60)
+            if best:
+                best[3]["note"] = "vát góc lưng %dx%dmm (cánh còn lại lùi %d) - CẦN XEM, tránh chạm bản mã" % (
+                    best[3]["a"], best[3]["b"], best[3]["b"])
+                m[k2] = best[3]
+                rep.append({"loai": "bản mã chạm thép", "thanh": m["id"], "vat": "góc lưng %dx%d" % (best[3]["a"], best[3]["b"])})
+                continue
         if best:
             cut = best[3]
             cut["note"] = "vát tam giác %s %dx%dmm (ĐỀ XUẤT - tránh chạm bản mã)" % (

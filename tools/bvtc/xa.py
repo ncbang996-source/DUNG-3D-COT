@@ -466,7 +466,10 @@ def build_x1(doc, msp, cfg, z_top):
         out.append(member(P11(*b1, z_), P11(*b2, z_), secn, unitv([-hd[0], -hd[1], 0.0]),
                           np.array([0, 0, 1.0 if up else -1.0]), gauge(m), "LEN" if up else "XUONG", "mat_bang_1_1",
                           {"xa_bo": "X1"}))
+    xtip11 = min(min(m["c1"][0], m["c2"][0]) for m in ch)
     for q, d in b11:
+        if d == 16 and abs(q[1] - yc) * SC < 60 and (q[0] - xtip11) * SC < 600:
+            continue        # người dùng (góp ý 28/11): bỏ cụm 4 lỗ M16 giữa bản X114 (không bu lông, không lỗ)
         bolts3.append((P11(*q, z_dn), np.array([0, 0, 1.0]), d, Lc(l11, q, d), "mat_bang_1_1", None))
     # ---------- 2-2: mặt phẳng 2 biên dưới (xiên) - ánh xạ song tuyến theo đường lưng cánh còn lại 2 biên dưới
     G1, G2, e1d, e2d = flange_line(md)
@@ -498,6 +501,29 @@ def build_x1(doc, msp, cfg, z_top):
     n22 = unitv(np.cross(Lf_t - Lf_c, np.array([0, 1.0, 0])))
     if np.dot(n22, in_side) < 0:
         n22 = -n22
+    # góp ý 28/11: thanh ngang 2-2 phía cột (L50x4, sát thanh đứng) dời 50 mm DỌC BIÊN về phía đầu xà (kèm bu lông):
+    # mỗi đầu trượt dọc đường biên của nó trên hình 2-2 (2 biên chụm dần về đầu xà)
+    k50 = 0.050 / float(np.linalg.norm(Lf_t - Lf_c))
+    dF = (np.array(tipf) - np.array(colf)) * k50
+    dB = (np.array(tipb) - np.array(colb)) * k50
+    tr22 = [m for m in a22 if m["section"] != "L70X6" and abs(m["ang"] % 180 - 90) < 5]
+    m_mv = max(tr22, key=lambda m: m["c1"][0] + m["c2"][0]) if len(tr22) > 1 else None
+
+    def slide(q):
+        tf = (q[0] - colf[0]) / (tipf[0] - colf[0])
+        yf = colf[1] + (tipf[1] - colf[1]) * tf
+        yb = colb[1] + (tipb[1] - colb[1]) * tf
+        d_ = dF if abs(q[1] - yf) < abs(q[1] - yb) else dB
+        return (q[0] + d_[0], q[1] + d_[1])
+    if m_mv is not None:
+        c1_, c2_ = np.array(m_mv["c1"]), np.array(m_mv["c2"])
+        uu = (c2_ - c1_) / np.linalg.norm(c2_ - c1_)
+        moved_b = {tuple(q): slide(q) for q, d in b22
+                   if abs(uu[0] * (q[1] - c1_[1]) - uu[1] * (q[0] - c1_[0])) * SC < 40}
+        for k_ in ("c1", "c2", "b1", "b2"):
+            m_mv[k_] = slide(m_mv[k_])
+        b22 = [(moved_b.get(tuple(q), q), d) for q, d in b22]
+        rep["X1_doi_2_2_mm"] = {"thanh": m_mv["section"], "doc_bien_mm": 50, "bu_long": len(moved_b)}
     for m in a22:
         if m["section"] == "L70X6":
             continue
@@ -505,11 +531,15 @@ def build_x1(doc, msp, cfg, z_top):
             m["section"] = "L50X4"
         b1, b2, _ = ends_by_bolts(m, b22)
         p1, p2 = P22(*b1), P22(*b2)
+        under = m["section"] == "L60X5"     # góp ý 28/11: thanh chéo L60x5 úp xuống MẶT DƯỚI cánh biên dưới
+        if under:
+            p1, p2 = p1 - n22 * t_d, p2 - n22 * t_d
         u_ = unitv(p2 - p1)
         hd = np.array(m["heel_dir"])
         hd3 = P22(b1[0] + hd[0], b1[1] + hd[1]) - p1
         e1 = unitv(-(hd3 - np.dot(hd3, u_) * u_ - np.dot(hd3, n22) * n22))
-        mm = member(p1, p2, m["section"], e1, n22, gauge(m), "LEN", "mat_cat_2_2", {"xa_bo": "X1"})
+        mm = member(p1, p2, m["section"], e1, -n22 if under else n22, gauge(m), "XUONG" if under else "LEN",
+                    "mat_cat_2_2", {"xa_bo": "X1"})
         # 2 cánh nằm biên dưới nghiêng ngược nhau (+-8 độ, mỗi biên vuông góc mặt bên xoay của nó): nâng thanh theo pháp
         # tuyến mặt 2-2 tới khi không lấn vào biên (khe còn lại: tấm đệm vừa khe khi xếp bu lông) - thanh ép sát
         chords = [md, mir_m(md, MYv)]
@@ -517,8 +547,9 @@ def build_x1(doc, msp, cfg, z_top):
             sp_ = CK.samples(mm, {mm["section"]: T.sec(mm["section"])})
             if not any(np.any(CK.where_v(c_, {md["section"]: T.sec(md["section"])}, sp_, 0.0005) > 0) for c_ in chords):
                 break
-            mm["p1"] = (np.array(mm["p1"]) + n22 * 0.001).round(5).tolist()
-            mm["p2"] = (np.array(mm["p2"]) + n22 * 0.001).round(5).tolist()
+            sg_ = -1.0 if under else 1.0
+            mm["p1"] = (np.array(mm["p1"]) + sg_ * n22 * 0.001).round(5).tolist()
+            mm["p2"] = (np.array(mm["p2"]) + sg_ * n22 * 0.001).round(5).tolist()
         out.append(mm)
     for q, d in b22:
         pq = P22(*q)
@@ -531,7 +562,7 @@ def build_x1(doc, msp, cfg, z_top):
             ax_ = in_side
         elif abs(q[1] - yb) * SC < 60:
             ax_ = in_side * MYv
-        bolts3.append((pq - ax_ * 0.02, ax_, d, Lc(l22, q, d), "mat_cat_2_2", None))
+        bolts3.append((pq - ax_ * 0.035, ax_, d, Lc(l22, q, d), "mat_cat_2_2", None))
     # ---------- 5-5: thanh chéo L50x4 giữa 2 thanh đứng. Người dùng: bẻ cục bộ cánh còn lại thanh đứng (18,1°) cho
     # nằm trong mặt phẳng ngang x = lưng thanh đứng; thanh chéo áp phẳng trên mặt đó (mặt phẳng x = const)
     mv = next(m for m in out if m["mark"] == "X1_dung")
@@ -896,9 +927,9 @@ def main(dxf, scene_in, scene_out):
                 L = next((x for x in Ls if x >= grip + 0.8 * d + 7), None) or int(math.ceil((grip + 0.8 * d + 7) / 10) * 10)
                 bolts_out.append({"id": 0, "p": np.round(p0 + ax * s0, 5).tolist(), "axis": np.round(ax, 6).tolist(),
                                   "nut": np.round(ax, 6).tolist(), "d_mm": d, "grip_mm": round(grip, 1), "L_mm": L,
-                                  "L_from": "ký hiệu bản vẽ" if Ls else "tính", "t_mm": 8, "kind": "treo",
-                                  "lop": names, "note": "bu lông treo chuỗi sứ" if "X213" in names[0]
-                                  else "bu lông treo chuỗi đỡ lèo dây dẫn"})
+                                  "L_from": "ký hiệu bản vẽ" if Ls else "tính", "t_mm": 8, "kind": "lo",
+                                  "lop": names, "note": ("lỗ treo chuỗi sứ" if "X213" in names[0]
+                                  else "lỗ treo chuỗi đỡ lèo dây dẫn") + " (chỉ thể hiện lỗ - góp ý 28/11)"})
                 continue
             waiting.append({"p": np.round(p0, 3).tolist(), "nguon": view, "lop": names})
             continue
@@ -958,7 +989,7 @@ def main(dxf, scene_in, scene_out):
     rep["ban_ma_xa"] = len(new_p)
     rep["bu_long_xa"] = len(bolts_out)
     rep["bu_long_than_thay"] = removed
-    rep["bu_long_treo"] = sum(1 for b in bolts_out if b["kind"] == "treo")
+    rep["lo_treo"] = sum(1 for b in bolts_out if b["kind"] == "lo")
     rep["lo_khong_bat"] = len(waiting)
     rep["lo_khong_bat_mau"] = waiting[:12]
     sc["title"] = sc["title"].replace("(ghép)", "+ xà X2 (ghép)")

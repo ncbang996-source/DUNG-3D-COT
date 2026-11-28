@@ -36,8 +36,17 @@ def run(V):  # noqa: C901
         if not ONTOP and (q[1] - base_y) * SC < ST.BASE_ZONE and \
                 any(dist_line(q, L_["w1"], L_["w2"]) < 16 for L_ in legs):
             continue                                   # chân cột: lấy đúng theo lỗ trên chi tiết sườn
-        if any("holes" in pl and point_in_poly(q, pl["pts"]) for pl in plates2d):
-            continue                                   # bản mã có hình chi tiết: lấy lỗ theo chi tiết
+        pl_in = [pl for pl in plates2d if "holes" in pl and point_in_poly(q, pl["pts"])]
+        if pl_in:
+            # bản mã có hình chi tiết: lấy lỗ theo chi tiết. Bu lông vẽ không có lỗ chi tiết nào trong 15 mm (lỗ chi
+            # tiết lệch mặt đứng > ngưỡng, bị coi là lỗ chờ - VD đầu thanh xiên DN-02, góp ý "thanh xiên thiếu bu lông")
+            # -> giữ bu lông vẽ (nằm đúng đường đinh thanh)
+            if any(math.dist(h_, q) * SC < 15 for pl in pl_in for h_, _ in pl["holes"]):
+                continue
+            rep.setdefault("bolts_drawn_no_detail_hole", []).append(
+                {"ban_ma": pl_in[0].get("mark"), "p": [round(q[0], 2), round(q[1], 2)], "d": {"1": 16, "2": 20, "3": 24}[e.dxf.name]})
+            bolts2d.append({"p": q, "d": {"1": 16, "2": 20, "3": 24}[e.dxf.name], "src": "mặt đứng (lỗ chi tiết lệch)"})
+            continue
         if not any(point_in_poly(q, pl["pts"]) for pl in plates2d) and \
                 any(point_in_poly(q, P) for P in banma if P not in [pl["pts"] for pl in plates2d]):
             continue                                   # lỗ trên hình chi tiết vẽ riêng
