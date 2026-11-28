@@ -371,6 +371,245 @@ def build_x2(doc, msp, cfg):
     return el, out, plates, bolts3, [], rep, (E3, P3, z_fb, z_ft)
 
 
+X1 = {
+    "elev": (-2360, -119355, -2212, -119255),   # mặt đứng tay trái X1 (hình thật mặt bên xoay 18,1 độ)
+    "x_back": -2217.96, "y_top": -119277.05,    # lưng thanh cánh; đường đinh biên trên (= thanh L70x6 đỉnh)
+    "p11": (-2085, -119375, -1958, -119250),    # mặt bằng 1-1 (biên trên)
+    "p22": (-2075, -119495, -1915, -119385),    # mặt cắt 2-2 (mặt phẳng biên dưới)
+    "p55": (-1860, -119465, -1765, -119400),    # mặt cắt 5-5 (qua thanh đứng)
+    "x_bend": 1.040, "slope": 0.327,            # chỗ bẻ đầu thanh L70x6 đỉnh DN-01 (mặt cắt 1-1 DN-01)
+    "details": {"X113": (-1804, -119269), "X114": (-1806, -119358)},
+    "plan_labels": {"p11": {90: "L50X4", 54.9: "L60X5"}},
+}
+
+
+def build_x1(doc, msp, cfg, z_top):
+    """Tay trái X1, mặt trước + mặt bằng 1-1 / 2-2 / 5-5. Mặt bên X1 = mặt đứng xoay th = atan(0,327) quanh trục
+    đứng tại x = -x_bend, mặt lưng cột (y = -BACK) (người dùng chốt); mặt đứng tờ xà là hình thật của mặt này."""
+    rep = {}
+    th = math.atan(cfg["slope"])
+    sb = cfg["x_bend"] - BACK
+    A = np.array([-cfg["x_bend"], -BACK])
+    dirv = np.array([-math.cos(th), math.sin(th)])       # dọc mặt xà ra đầu xà (tay trái, mặt trước)
+    nout = np.array([-math.sin(th), -math.cos(th)])      # pháp tuyến ra ngoài mặt xà
+
+    def E(x, y, d=0.0):
+        s_ = -(x - cfg["x_back"]) * SC / 1000
+        z = z_top + (y - cfg["y_top"]) * SC / 1000
+        if s_ <= sb:
+            xy = np.array([-(BACK + s_), -(BACK + d / 1000)])
+        else:
+            xy = A + dirv * (s_ - sb) + nout * d / 1000
+        return np.array([xy[0], xy[1], z])
+    along = np.array([-dirv[0], -dirv[1], 0.0])            # x bản vẽ tăng -> về phía cột
+    out = []
+    ms, eb, elab, efl = read_view(doc, msp, cfg["elev"])
+    el = {}
+    for m in ms:
+        a = m["ang"] % 180
+        key = "X1_tren" if a < 1 else "X1_duoi" if 140 < a < 170 else "X1_dung" if abs(a - 90) < 1 else \
+            "X1_cheo" if 20 < a < 45 else None
+        if key:
+            el[key] = m
+    t_of = lambda k: T.sec(el[k]["section"])["t"]
+    dep = {"X1_tren": (0.0, 0.0), "X1_duoi": (0.0, 0.0), "X1_dung": (-t_of("X1_duoi"), -t_of("X1_tren")),
+           "X1_cheo": (0.0, 8.0)}
+    for k, m in el.items():
+        b1, b2, _ = ends_by_bolts(m, eb)
+        out_ = m["vis"] == "S"
+        d1, d2 = dep[k]
+        if k == "X1_dung" and b1[1] > b2[1]:
+            d1, d2 = d2, d1
+        if k == "X1_cheo":                     # đầu sát cột (x lớn) áp mặt ngoài tai bản mã 117 (d8), đầu kia áp biên dưới
+            d1, d2 = (8.0, 0.0) if b1[0] > b2[0] else (0.0, 8.0)
+        p1, p2 = E(*b1, d1), E(*b2, d2)
+        hd = np.array(m["heel_dir"])
+        e1 = unitv(-(hd[0] * along + np.array([0, 0, 1.0]) * hd[1]))
+        e2 = np.r_[nout, 0.0] if out_ else -np.r_[nout, 0.0]
+        out.append(member(p1, p2, m["section"], e1, e2, gauge(m), "NGOAI" if out_ else "TRONG", "mat_dung",
+                          {"mark": k, "xa_bo": "X1"}))
+    rep["mat_dung"] = {k: v["section"] for k, v in el.items()}
+    mt = next(m for m in out if m["mark"] == "X1_tren")
+    md = next(m for m in out if m["mark"] == "X1_duoi")
+    bolts3 = []
+    Lc = lambda labs, q, d: sorted({L for dd, L, pp in labs if dd == d and math.dist(pp, q) < 40})
+    for q, d in eb:
+        if -(q[0] - cfg["x_back"]) * SC / 1000 > sb + 0.02:
+            bolts3.append((E(*q), -np.r_[nout, 0.0], d, Lc(elab, q, d), "mat_dung", None))
+
+    def flange_line(m):
+        """Cánh còn lại (chĩa vào trong tay xà) của biên: điểm lưng + hướng cánh (e2) + hướng dày (e1)."""
+        P1, P2, e1, e2 = CK.frame(m)
+        H1, H2 = P1 - e1 * m["g"][0] / 1000, P2 - e1 * m["g"][0] / 1000
+        return H1, H2, e1, e2
+    # ---------- mặt bằng 1-1: 2 thanh nối 2 biên trên (nằm ngang) - nét liền: trên mặt trên cánh nằm biên trên
+    H1, H2, e1t, e2t = flange_line(mt)
+    a11, b11, l11, f11 = read_view(doc, msp, cfg["p11"])
+    ch = sorted([m for m in a11 if m["section"] == "L70X6"], key=lambda m: m["c1"][1])
+    xe = max(max(m["c1"][0], m["c2"][0]) for m in ch)                      # đầu cột trên mặt bằng
+    yc = (min(m["c1"][1] for m in ch) + max(m["c2"][1] for m in ch)) / 2
+    Xe = mt["p2"][0] if abs(mt["p2"][0]) < abs(mt["p1"][0]) else mt["p1"][0]
+    t_t = T.sec(mt["section"])["t"] / 1000
+    z_up = max(H1[2], H1[2] + e1t[2] * t_t)                                 # mặt trên cánh nằm biên trên
+    z_dn = min(H1[2], H1[2] + e1t[2] * t_t)
+    P11 = lambda x, y, z: np.array([Xe + (x - xe) * SC / 1000, (y - yc) * SC / 1000, z])
+    for m in a11:
+        if m["section"] == "L70X6":
+            continue
+        a_ = m["ang"] % 180
+        secn = "L50X4" if abs(a_ - 90) < 2 else "L60X5"                   # nhãn trên hình (bộ đọc gán nhầm L60x5)
+        m["section"] = secn
+        b1, b2, _ = ends_by_bolts(m, b11)
+        up = m["vis"] == "S"
+        z_ = z_up if up else z_dn
+        hd = np.array(m["heel_dir"])
+        out.append(member(P11(*b1, z_), P11(*b2, z_), secn, unitv([-hd[0], -hd[1], 0.0]),
+                          np.array([0, 0, 1.0 if up else -1.0]), gauge(m), "LEN" if up else "XUONG", "mat_bang_1_1",
+                          {"xa_bo": "X1"}))
+    for q, d in b11:
+        bolts3.append((P11(*q, z_dn), np.array([0, 0, 1.0]), d, Lc(l11, q, d), "mat_bang_1_1", None))
+    # ---------- 2-2: mặt phẳng 2 biên dưới (xiên) - ánh xạ song tuyến theo đường lưng cánh còn lại 2 biên dưới
+    G1, G2, e1d, e2d = flange_line(md)
+    a22, b22, l22, f22 = read_view(doc, msp, cfg["p22"])
+    cd = sorted([m for m in a22 if m["section"] == "L70X6"], key=lambda m: m["c1"][1] + m["c2"][1])
+    fr, bk = cd[0], cd[1]                                                   # mặt trước (y nhỏ), mặt sau
+    colf = max((fr["c1"], fr["c2"]), key=lambda q: q[0])
+    tipf = min((fr["c1"], fr["c2"]), key=lambda q: q[0])
+    colb = max((bk["c1"], bk["c2"]), key=lambda q: q[0])
+    tipb = min((bk["c1"], bk["c2"]), key=lambda q: q[0])
+    gd = gauge({"section": md["section"], "width": 70, "heel_to_center": 35})
+    # đường đinh cánh còn lại biên dưới (3D), mặt trước; mặt sau = đối xứng y
+    Gc = G2 if abs(G2[0]) < abs(G1[0]) else G1
+    Gt = G1 if abs(G2[0]) < abs(G1[0]) else G2
+    Lf_c, Lf_t = Gc + e2d * gd / 1000, Gt + e2d * gd / 1000
+    MYv = np.array([1, -1, 1.0])
+    t_d = T.sec(md["section"])["t"] / 1000
+    in_side = e1d if e1d[2] > 0 else -e1d                                  # mặt cánh còn lại phía trong tay xà (trên)
+    off_in = t_d if np.dot(in_side, e1d) > 0 else 0.0
+
+    def P22(x, y):
+        tf = (x - colf[0]) / (tipf[0] - colf[0])
+        yf = colf[1] + (tipf[1] - colf[1]) * tf
+        yb = colb[1] + (tipb[1] - colb[1]) * tf
+        v = (y - yf) / (yb - yf)
+        F_ = Lf_c + (Lf_t - Lf_c) * tf
+        B_ = F_ * MYv
+        return F_ + (B_ - F_) * v + e1d * off_in
+    n22 = unitv(np.cross(Lf_t - Lf_c, np.array([0, 1.0, 0])))
+    if np.dot(n22, in_side) < 0:
+        n22 = -n22
+    for m in a22:
+        if m["section"] == "L70X6":
+            continue
+        if not m["section"]:
+            m["section"] = "L50X4"
+        b1, b2, _ = ends_by_bolts(m, b22)
+        p1, p2 = P22(*b1), P22(*b2)
+        u_ = unitv(p2 - p1)
+        hd = np.array(m["heel_dir"])
+        hd3 = P22(b1[0] + hd[0], b1[1] + hd[1]) - p1
+        e1 = unitv(-(hd3 - np.dot(hd3, u_) * u_ - np.dot(hd3, n22) * n22))
+        mm = member(p1, p2, m["section"], e1, n22, gauge(m), "LEN", "mat_cat_2_2", {"xa_bo": "X1"})
+        # 2 cánh nằm biên dưới nghiêng ngược nhau (+-8 độ, mỗi biên vuông góc mặt bên xoay của nó): nâng thanh theo pháp
+        # tuyến mặt 2-2 tới khi không lấn vào biên (khe còn lại: tấm đệm vừa khe khi xếp bu lông) - thanh ép sát
+        chords = [md, mir_m(md, MYv)]
+        for k_ in range(0, 15):
+            sp_ = CK.samples(mm, {mm["section"]: T.sec(mm["section"])})
+            if not any(np.any(CK.where_v(c_, {md["section"]: T.sec(md["section"])}, sp_, 0.0005) > 0) for c_ in chords):
+                break
+            mm["p1"] = (np.array(mm["p1"]) + n22 * 0.001).round(5).tolist()
+            mm["p2"] = (np.array(mm["p2"]) + n22 * 0.001).round(5).tolist()
+        out.append(mm)
+    for q, d in b22:
+        pq = P22(*q)
+        # bu lông trên cánh biên dưới: trục theo pháp tuyến cánh biên đó (trước / sau), còn lại theo mặt 2-2
+        tf = (q[0] - colf[0]) / (tipf[0] - colf[0])
+        yf = colf[1] + (tipf[1] - colf[1]) * tf
+        yb = colb[1] + (tipb[1] - colb[1]) * tf
+        ax_ = n22
+        if abs(q[1] - yf) * SC < 60:
+            ax_ = in_side
+        elif abs(q[1] - yb) * SC < 60:
+            ax_ = in_side * MYv
+        bolts3.append((pq - ax_ * 0.02, ax_, d, Lc(l22, q, d), "mat_cat_2_2", None))
+    # ---------- 5-5: thanh chéo L50x4 giữa 2 thanh đứng (2 mặt cánh còn lại thanh đứng)
+    mv = next(m for m in out if m["mark"] == "X1_dung")
+    P1v, P2v, e1v, e2v = CK.frame(mv)
+    gv = mv["g"][0] / 1000
+    tv = T.sec(mv["section"])["t"] / 1000
+    a55, b55, l55, f55 = read_view(doc, msp, cfg["p55"])
+    vv = sorted([m for m in a55 if abs(m["ang"] - 90) < 2], key=lambda m: m["c1"][0])
+    xc5 = (vv[0]["c1"][0] + vv[-1]["c1"][0]) / 2
+    half5 = abs(vv[0]["c1"][0] - xc5)
+    ylo5 = min(vv[0]["c1"][1], vv[0]["c2"][1])
+    zlo = min(P1v[2], P2v[2])
+    Hv = (P1v if P1v[2] < P2v[2] else P2v) - e1v * gv                       # lưng cánh còn lại thanh đứng (mặt trước)
+    yb5 = abs((Hv + e2v * T.sec(mv["section"])["b"] / 2000)[1])
+
+    def P55(x, y, face_off):
+        f = (x - xc5) / half5
+        base = Hv + e1v * face_off
+        Pf = np.array([base[0], -yb5, zlo + (y - ylo5) * SC / 1000])
+        return Pf if f <= 0 else Pf * MYv
+    for m in a55:
+        if abs(m["ang"] - 90) < 2:
+            continue
+        up = m["vis"] == "S"
+        off = 0.0 if up else tv
+        b1, b2, _ = ends_by_bolts(m, b55)
+        p1 = P55(*b1, off)
+        p2 = P55(*b2, off)
+        p1[1] = (b1[0] - xc5) / half5 * yb5
+        p2[1] = (b2[0] - xc5) / half5 * yb5
+        hd = np.array(m["heel_dir"])
+        e1 = unitv([0.0, -hd[0], -hd[1]])
+        e1 = unitv(e1 - np.dot(e1, e1v) * e1v)
+        e2 = -e1v if up else e1v
+        out.append(member(p1, p2, m["section"], e1, e2, gauge(m), "NGOAI" if up else "TRONG", "mat_cat_5_5",
+                          {"xa_bo": "X1"}))
+    for q, d in b55:
+        pq = P55(*q, 0.0)
+        pq[1] = (q[0] - xc5) / half5 * yb5
+        bolts3.append((pq - e1v * 0.02, e1v, d, Lc(l55, q, d), "mat_cat_5_5", None))
+    # ---------- bản mã: X113 (đầu xà, mặt bên, d8 ngoài biên) - X114 (đầu xà, nằm ngang d12, dưới cánh nằm biên trên)
+    plates = []
+    banma = T.banma_loops(msp)
+    allb = [((e.dxf.insert[0], e.dxf.insert[1]), {"1": 16, "2": 20, "3": 24}[e.dxf.name]) for e in msp.query("INSERT")
+            if e.dxf.name in ("1", "2", "3")]
+    cen = lambda P: (sum(q[0] for q in P) / len(P), sum(q[1] for q in P) / len(P))
+
+    def detail(mark):
+        c = cfg["details"][mark]
+        P = min(banma, key=lambda P: math.dist(cen(P), c))
+        return P, [q for q, _ in allb if T.point_in_poly(q, P)]
+
+    def put(mark, box, bolts_v, to3, a1, a2, td, t_mm):
+        D, Hh = detail(mark)
+        inb = lambda q: box[0] <= q[0] <= box[2] and box[1] <= q[1] <= box[3]
+        Ps = [P for P in banma if all(inb(q) for q in P)]
+        tip_ = min(Ps, key=lambda P: cen(P)[0])
+        Tf = fit_by_holes(D, Hh, [q for q, _ in bolts_v if math.dist(q, cen(tip_)) * SC < 350], cen(tip_))
+        pts = [to3(*Tf(q)) for q in D]
+        o = pts[0]
+        poly = [[round(float(np.dot(q - o, a1)), 5), round(float(np.dot(q - o, a2)), 5)] for q in pts]
+        area = abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                       for i in range(len(poly)))) / 2
+        here = [q for q, _ in bolts_v if any(math.dist(Tf(h), q) * SC < 15 for h in Hh)]
+        plates.append({"kind": "gusset", "node": np.round(o, 4).tolist(), "members": [], "t_mm": t_mm, "on_leg": False,
+                       "origin": np.round(o, 5).tolist(), "a1": np.round(a1, 6).tolist(), "a2": np.round(a2, 6).tolist(),
+                       "thick_dir": np.round(td, 6).tolist(), "poly": poly, "area_m2": round(area, 5),
+                       "mass_kg": round(area * t_mm / 1000 * 7850, 2), "bolt_max": 0, "d_max_mm": 0, "leg_bolts": 0,
+                       "mark": mark, "reason": "bản mã xà %s d%d theo hình chi tiết (khớp %d/%d lỗ)" % (
+                           mark, t_mm, len(here), len(Hh))})
+    put("X113", cfg["elev"], eb, lambda x, y: E(x, y, 0.0), np.r_[-dirv, 0.0], np.array([0, 0, 1.0]),
+        np.r_[nout, 0.0], 8)
+    # X114: biên trên có lưng ở TRÊN (cánh đứng thõng xuống) -> bản nằm TRÊN cánh nằm (hình 1-1 vẽ nét liền)
+    put("X114", cfg["p11"], b11, lambda x, y: P11(x, y, z_up), np.array([1.0, 0, 0]), np.array([0, 1.0, 0]),
+        np.array([0, 0, 1.0]), 12)
+    rep["thanh"] = len(out)
+    return out, plates, bolts3, rep
+
+
 # ---------------------------------------------------------------- đối xứng, cao độ, bu lông, ghép vào cột
 def mir_m(m, M):
     m = json.loads(json.dumps(m))
@@ -471,6 +710,26 @@ def main(dxf, scene_in, scene_out):
                 new_b.append((b[0] * M + Z, b[1] * M, b[2], b[3], b[4], b[5]))
             for n, t, v, q in arm_f:
                 new_f.append((n, t, v, q * M + Z))
+    # ---------- xà X1 (1 bộ ở đỉnh DN-01): cao độ = đường đinh thanh L70x6 đỉnh (đã bẻ 2 đầu)
+    ztop = [m["p1"][2] for m in sc["members"] if m["section"] == "L70X6" and m.get("prof") and m["rule"] == "face"]
+    if ztop:
+        z_top = max(ztop)
+        o1, p1_, b1_, r1 = build_x1(doc, msp, X1, z_top)
+        for m in o1:
+            S.setdefault(m["section"], T.sec(m["section"]))
+        arm1_m = o1 + [mir_m(m, MY) for m in o1 if m["xa_view"] == "mat_dung"]
+        arm1_p = p1_ + [mir_p(p, MY) for p in p1_ if abs(p["thick_dir"][2]) < 0.5]
+        arm1_b = b1_ + [(b[0] * MY, b[1] * MY, b[2], b[3], b[4], b[5]) for b in b1_ if b[4] == "mat_dung"]
+        for side, M in (("trái", np.array([1, 1, 1.0])), ("phải", MX)):
+            for m in arm1_m:
+                mm = mir_m(m, M)
+                nid += 1
+                mm["id"] = nid
+                mm["xa"] = "X1, tay %s" % side
+                new_m.append(mm)
+            new_p.extend(mir_p(p, M) for p in arm1_p)
+            new_b.extend((b[0] * M, b[1] * M, b[2], b[3], b[4], b[5]) for b in arm1_b)
+        rep["X1"] = dict(r1, cao_do_m=round(z_top, 3))
     # đầu dưới X205 áp mặt ngoài bản mã có tai của thân: chiều dày thật từng cao độ (DN-01: 123 d8; DN-02: 226 d10)
     face_pl = [p for p in sc["plates"] if abs(p["thick_dir"][1]) > 0.9 and p.get("kind") != "filler"]
     for m in new_m:
@@ -634,12 +893,13 @@ def main(dxf, scene_in, scene_out):
                     c = p0 + ax * (a_ + i * tt / 1000)
                     e1 = unitv(np.cross(ax, [0, 0, 1.0]) if abs(ax[2]) < 0.9 else np.cross(ax, [1.0, 0, 0]))
                     e2 = np.cross(ax, e1)
-                    rr = 0.022
-                    o = c - e1 * rr - e2 * rr
+                    rr = 0.0185                      # tấm đệm tròn cỡ vòng đệm (vuông 44 lấn sang thanh bên)
+                    o = c
                     new_p.append({"kind": "filler", "node": np.round(c, 4).tolist(), "members": [], "t_mm": round(tt, 2),
                                   "on_leg": False, "origin": np.round(o, 5).tolist(), "a1": np.round(e1, 6).tolist(),
                                   "a2": np.round(e2, 6).tolist(), "thick_dir": np.round(ax, 6).tolist(),
-                                  "poly": [[0, 0], [0.044, 0], [0.044, 0.044], [0, 0.044]], "area_m2": 0.00194,
+                                  "poly": [[round(rr * math.cos(2 * math.pi * k / 16), 5), round(rr * math.sin(2 * math.pi * k / 16), 5)]
+                                           for k in range(16)], "area_m2": 0.00108,
                                   "mass_kg": round(0.00194 * tt / 1000 * 7850, 2), "bolt_max": 1, "d_max_mm": d,
                                   "leg_bolts": 0, "reason": "tấm đệm xà %d x %g (khe %.1f mm)" % (n, tt, gp)})
         grip = (s1 - s0) * 1000

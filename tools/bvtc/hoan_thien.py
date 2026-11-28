@@ -92,9 +92,11 @@ def restack(b, s, S):
             e2 = np.cross(ax, e1)
             tt = (r_[0] - e) * 1000 - 0.4
             s["plates"].append({"kind": "filler", "node": np.round(c, 4).tolist(), "members": [], "t_mm": round(tt, 1),
-                                "on_leg": False, "origin": np.round(c - e1 * 0.022 - e2 * 0.022 + ax * 0.0002, 5).tolist(),
+                                "on_leg": False, "origin": np.round(c + ax * 0.0002, 5).tolist(),
                                 "a1": np.round(e1, 6).tolist(), "a2": np.round(e2, 6).tolist(),
-                                "thick_dir": np.round(ax, 6).tolist(), "poly": [[0, 0], [0.044, 0], [0.044, 0.044], [0, 0.044]],
+                                "thick_dir": np.round(ax, 6).tolist(),
+                                "poly": [[round(0.0185 * np.cos(2 * np.pi * k / 16), 5), round(0.0185 * np.sin(2 * np.pi * k / 16), 5)]
+                                         for k in range(16)],
                                 "area_m2": 0.00194, "mass_kg": round(0.00194 * tt / 1000 * 7850, 2), "bolt_max": 1,
                                 "d_max_mm": b.get("d_mm", 16), "leg_bolts": 0,
                                 "reason": "tấm đệm dày %.1f vừa khe giữa các lớp (lệch 2 đoạn ghép)" % tt})
@@ -186,12 +188,49 @@ def bolt_fix(s, S, rep):
             rep.append({"loai": "bu lông cấn thép", "thanh": m["id"], "bu_long": r["bolt"], "loi": "không gỡ được"})
 
 
+def plate_fix(s, S, rep):
+    """Bản mã chạm thanh ở gần đầu thanh (VD tai bản mã bẻ theo mặt xà X1): vát tam giác đầu thanh."""
+    M = {m["id"]: m for m in s["members"]}
+    for r in CK.plate_clashes(s, S):
+        m = M[r["m"]]
+        pl = s["plates"][r["plate"]]
+        if pl.get("kind") == "filler":
+            rep.append({"loai": "tấm đệm chạm thép", "thanh": m["id"], "loi": "cần xem"})
+            continue
+        pts = CK.plate_points(pl)
+        h = pts[CK.where_v(m, S, pts, 0.001) > 0]
+        if not len(h):
+            continue
+        key, dx = end_key(m, h.mean(0))
+        if dx > 0.3:
+            rep.append({"loai": "bản mã chạm thép", "thanh": m["id"], "loi": "giữa thanh"})
+            continue
+        k2 = key if not m.get(key) else (key + "b" if not m.get(key + "b") else None)
+        if k2 is None:
+            rep.append({"loai": "bản mã chạm thép", "thanh": m["id"], "loi": "đầu thanh đã có 2 vát"})
+            continue
+        fls = ("out", "conn") if k2 == key else (("conn",) if m[key]["flange"] == "out" else ("out",))
+
+        def touching(m=m, pts=pts):
+            return bool(np.any(CK.where_v(m, S, pts, 0.001) > 0))
+        best = F.tri_search([(m, k2, F.bolt_spots(m, S, s["bolts"]), touching)], S, amax_frac=0.6, flanges=fls)
+        if best:
+            cut = best[3]
+            cut["note"] = "vát tam giác %s %dx%dmm (ĐỀ XUẤT - tránh chạm bản mã)" % (
+                "cánh còn lại" if cut["flange"] == "out" else "mép cánh liên kết", cut["a"], cut["b"])
+            m[k2] = cut
+            rep.append({"loai": "bản mã chạm thép", "thanh": m["id"], "vat": "%dx%d %s" % (cut["a"], cut["b"], cut["flange"])})
+        else:
+            rep.append({"loai": "bản mã chạm thép", "thanh": m["id"], "loi": "không gỡ được"})
+
+
 def main(src, dst):
     s = json.load(open(src))
     S = s["sections"]
     rep = []
     if "--ghep" not in sys.argv:
         protrusion_fix(s, S, rep)          # host_ids chỉ đúng trong scene từng đoạn (mô hình ghép đánh lại số thanh)
+    plate_fix(s, S, rep)
     bolt_fix(s, S, rep)
     s["report"]["build"]["hoan_thien"] = rep
     json.dump(s, open(dst, "w"), ensure_ascii=False)

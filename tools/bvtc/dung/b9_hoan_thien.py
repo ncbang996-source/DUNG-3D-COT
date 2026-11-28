@@ -174,7 +174,8 @@ def run(V):  # noqa: C901
                                      "section": pm_["section"], "mm": dmm})
 
     if ST.CFG.get("top_bend"):
-        rep["top_bend"] = top_bend(members, plates, bolts, ST.CFG["top_bend"])
+        tbs = ST.CFG["top_bend"] if isinstance(ST.CFG["top_bend"], list) else [ST.CFG["top_bend"]]
+        rep["top_bend"] = [top_bend(members, plates, bolts, tb_) for tb_ in tbs]
     corner_fix(members, LIB, rep)
 
     for m in members:

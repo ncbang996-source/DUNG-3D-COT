@@ -109,7 +109,7 @@ def top_bend(members, plates, bolts, tb):
             return np.array([sg * xb + dx * math.cos(phi) - dy * math.sin(phi),
                              yb + dx * math.sin(phi) + dy * math.cos(phi), z]), phi
 
-        for m in members:
+        for m in ([] if tb.get("plates_only") else members):
             if m.get("face_k") != k or m["rule"] != "face" or not near(m["p1"][2]) or \
                     abs(m["p1"][2] - m["p2"][2]) > 0.01:
                 continue
