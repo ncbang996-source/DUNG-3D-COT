@@ -301,3 +301,12 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
 - Ghép DN-01: bản mã đoạn dưới phía trên mặt cắt mà đoạn trên không vẽ (219/220 ở cao độ L70x6 1710) -> giữ, đầu thanh
   DN-01 áp mặt ngoài thanh cánh đẩy ra đúng chiều dày bản mã; bu lông trùng lỗ giữ bản kẹp nhiều lớp hơn.
 - App: bản mã có chỗ lõm (123, 226) chia tam giác đúng hình (trước tô lấp chỗ lõm).
+
+## Xà X1 - đã dựng (xa.py build_x1), người dùng chốt
+- Mặt bên X1 = mặt đứng xoay 18,1 độ quanh chỗ bẻ (x = +-1040, lưng cột); mặt đứng tờ xà là hình thật mặt này. Biên trên
+  ốp chồng đoạn bẻ L70x6 đỉnh DN-01 (bản 117 ở giữa, biên trên TRONG áp mặt trong). Biên dưới vào tai bản mã có tai cao độ
+  L60x5 1770 - tai bản này bẻ 18,1 độ (top_bend mục 2 trong sheets.py). Lỗ 1 lớp = bu lông treo M20.
+- Bản X114 d12 (đầu xà) đặt TRÊN cánh nằm biên trên (biên trên lưng ở trên, cánh đứng thõng xuống; hình 1-1 nét liền).
+- ĐỂ LỆCH (người dùng: để xem thực tế): 2 biên dưới / 2 thanh đứng nằm trên 2 mặt xoay ngược nhau -> cánh tựa của thanh
+  2-2 lệch 8,6 độ mỗi đầu (gập 8,3, xoắn 2-3), thanh chéo 5-5 lệch 18 độ mỗi đầu. Thanh 2-2 nâng theo pháp tuyến mặt 2-2
+  cho khỏi lấn biên; vòng đệm / tấm đệm lún vài mm ở 1 mép (kiểm còn báo ~26 bu lông, ~18 tấm) - chờ người dùng quyết.
