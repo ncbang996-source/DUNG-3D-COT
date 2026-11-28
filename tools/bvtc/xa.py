@@ -414,8 +414,43 @@ def build_x1(doc, msp, cfg, z_top):
     t_of = lambda k: T.sec(el[k]["section"])["t"]
     dep = {"X1_tren": (0.0, 0.0), "X1_duoi": (0.0, 0.0), "X1_dung": (-t_of("X1_duoi"), -t_of("X1_tren")),
            "X1_cheo": (0.0, 8.0)}
+    # nét đầu thanh vẽ rõ ở đầu xà (đoạn ngắn vuông góc trục, dài ~ bề rộng vẽ, nằm trong dải thanh) - VD biên trên
+    # thò ra ngoài bản X113 20 mm (góp ý 28/11: thanh ra khỏi bản mã nằm ngang): kéo đầu thanh tới nét đó
+    bx = cfg["elev"]
+    shorts = []
+    for e in msp.query("LINE"):
+        a_, b_ = (e.dxf.start[0], e.dxf.start[1]), (e.dxf.end[0], e.dxf.end[1])
+        if all(bx[0] <= q[0] <= bx[2] and bx[1] <= q[1] <= bx[3] for q in (a_, b_)) and 0.5 < math.dist(a_, b_) < 6:
+            shorts.append((np.array(a_), np.array(b_)))
+
+    def tip_end_line(m, b1, b2):
+        c1_, c2_ = np.array(m["c1"]), np.array(m["c2"])
+        u_ = (c2_ - c1_) / np.linalg.norm(c2_ - c1_)
+        n_ = np.array([-u_[1], u_[0]])
+        bt = np.array(b1 if b1[0] < b2[0] else b2)          # đầu phía đầu xà (x bản vẽ nhỏ)
+        sgn = -1.0 if np.dot(u_, [1.0, 0]) > 0 else 1.0       # hướng về đầu xà dọc trục
+        best = None
+        for a_, b_ in shorts:
+            v_ = (b_ - a_) / np.linalg.norm(b_ - a_)
+            if abs(np.dot(v_, u_)) > 0.1 or abs(np.linalg.norm(b_ - a_) * SC - m["width"]) > 15:
+                continue
+            mid = (a_ + b_) / 2
+            ext = sgn * np.dot(mid - bt, u_)
+            off = np.dot(mid - c1_, n_)
+            if 0 < ext * SC < 400 and abs(off) * SC < m["width"]:
+                if best is None or ext > best[0]:
+                    best = (ext, bt + sgn * u_ * ext)
+        return best
     for k, m in el.items():
         b1, b2, _ = ends_by_bolts(m, eb)
+        if k in ("X1_tren", "X1_duoi"):
+            te = tip_end_line(m, b1, b2)
+            if te:
+                if b1[0] < b2[0]:
+                    b1 = tuple(te[1])
+                else:
+                    b2 = tuple(te[1])
+                rep.setdefault("keo_dau_xa_mm", {})[k] = round(te[0] * SC)
         out_ = m["vis"] == "S"
         d1, d2 = dep[k]
         if k == "X1_dung" and b1[1] > b2[1]:

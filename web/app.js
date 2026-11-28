@@ -695,7 +695,7 @@ $('fbList').addEventListener('click', (e) => {
   requestRender();
 });
 $('btnFbExport').addEventListener('click', () => {
-  if (!fb.items.length) { alert('Chưa có góp ý nào.'); return; }
+  if (!fb.items.length && !confirm('Không còn góp ý nào. Vẫn lưu file góp ý rỗng?')) return;
   const data = { app: 'dung-3d-cot', model: DATA.title || '', exported: new Date().toISOString(), items: fb.items };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
@@ -704,6 +704,12 @@ $('btnFbExport').addEventListener('click', () => {
   a.download = `gop_y_${tag}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('btnFbClear').addEventListener('click', () => {
+  if (!fb.items.length) return;
+  if (!confirm('Xóa hết ' + fb.items.length + ' góp ý?')) return;
+  fb.items = []; fb.draft = null; $('fbForm').hidden = true;
+  fbSaveLocal(); fbRenderList(); fbRedrawMarkers();
 });
 $('fbImport').addEventListener('change', async (e) => {
   const f = e.target.files[0]; if (!f) return;

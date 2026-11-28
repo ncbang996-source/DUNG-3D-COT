@@ -325,4 +325,6 @@ Người dùng đồng ý 4 đề xuất (phạm vi, mặt có xà, B-B, đườ
   5x15 / 5x20 tránh tai bản mã 119/119a (CẦN XEM).
 - Bu lông vẽ trên mặt đứng nằm trong bản mã có chi tiết nhưng không có lỗ chi tiết nào trong 15 mm (lỗ chi tiết lệch
   mặt đứng > ngưỡng) -> giữ bu lông vẽ (b5_bu_long). Trước bị mất: đầu thanh xiên DN-02 (bản 222/225/227), DN-01.
-
+- Biên X1 (xa.py build_x1): đầu phía đầu xà kéo tới nét đầu thanh vẽ rõ trên mặt đứng (biên trên thò ra ngoài bản
+  X113 20 mm, kéo thêm 110 mm so với trước - góp ý 28/11 21:10).
+- App: nút "Xóa hết" góp ý; "Tải file góp ý" cho lưu file rỗng (sau khi xóa các ý đã sửa).
